@@ -88,6 +88,10 @@ def send(to, sig, *args, gas=DEFAULT_GAS):
     """
     if not KEY:
         raise RuntimeError("KEEPER_KEY not set")
+    # Estimated first: a revert costs nothing, and the limit billed is the
+    # estimate plus a margin, never more than the cap for this kind of call.
+    est = first_int(cast("estimate", to, sig, *args, "--from", keeper_address()))
+    gas = min(gas, est * 13 // 10)
     for attempt in range(6):
         try:
             out = cast("send", to, sig, *args, "--private-key", KEY,
@@ -105,6 +109,17 @@ def send(to, sig, *args, gas=DEFAULT_GAS):
 
 def first_int(s):
     return int(s.split()[0])
+
+
+_address = None
+
+
+def keeper_address():
+    global _address
+    if _address is None:
+        _address = subprocess.run(["cast", "wallet", "address", "--private-key", KEY],
+                                  capture_output=True, text=True, check=True).stdout.strip()
+    return _address
 
 
 def credentials():
