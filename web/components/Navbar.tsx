@@ -82,7 +82,7 @@ export function Navbar() {
               <span className="flex h-[20px] w-[20px] shrink-0 items-center justify-center overflow-hidden rounded-full">
                 <img src={current.logo} alt={current.label} className="h-[20px] w-[20px] object-cover" />
               </span>
-              <span className="hidden sm:inline">{current.label}</span>
+              <span className="hidden sm:inline">{current.label} Testnet</span>
             </span>
 
             <MonadConnectPill />
