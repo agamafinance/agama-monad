@@ -32,8 +32,9 @@ jobs:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
       # The market maker's resting order ids, so each job cancels the last
-      # one's quotes instead of stacking new ones on top.
-      - uses: actions/cache@v4
+      # one's quotes instead of stacking new ones on top. Saved even when the
+      # job is cancelled; without it the script reads its orders off the book.
+      - uses: actions/cache/restore@v4
         with:
           path: .keys/kuru_mm.json
           key: kuru-mm-${{ github.run_id }}
@@ -47,3 +48,8 @@ jobs:
           # Re-quote the books when the mid moved 0.5% (or orders were taken):
           # each re-quote is a transaction billed on its gas limit.
           REQUOTE_BPS: "50"
+      - if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .keys/kuru_mm.json
+          key: kuru-mm-${{ github.run_id }}
