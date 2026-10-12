@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { encodeFunctionData, formatUnits, parseAbi, parseUnits } from 'viem';
+import { formatUnits, parseUnits } from 'viem';
+import { swapCall } from '@/lib/monad/loop';
 
 import { ADDR, asset, BPS, RAY, STOCK_DECIMALS, TOKENS, USDC_DECIMALS } from '@/lib/monad/config';
 import { earnRouterAbi, zapRouterAbi } from '@/lib/monad/generated/abis';
@@ -13,11 +14,6 @@ import { useMonadWallet } from '@/lib/monad/WalletProvider';
 import { TokenIcon } from '@/components/icons/TokenIcon';
 import { NotDeployed, PriceBadge } from '@/components/PriceBadge';
 import { ago, useDepositBaseline, useLastAgentAction } from '@/lib/monad/agents';
-
-/// The testnet stand-in DEX, priced at the Agama oracle and allowlisted on the zap.
-const testDexAbi = parseAbi([
-  'function swap(address wrapper, uint256 usdcIn, uint256 priceUsdc6) returns (uint256 out)',
-]);
 
 const pct = (bps: bigint | undefined) => (bps === undefined ? '-' : `${Number(bps) / 100}%`);
 const usd = (v: bigint | undefined) =>
@@ -86,15 +82,11 @@ export default function MonadEarnPage() {
     if (!address || !m) return;
     setPending('deposit');
     const zap = ADDR.zapRouter;
-    const dex = ADDR.testDexRouter;
-    if (!zap || !dex) { setStatus('No swap venue on this network'); return; }
+    if (!zap) { setStatus('No swap venue on this network'); return; }
     setBusy(true);
     try {
       if (!m.wrapperPrice) throw new Error('No price yet');
-      const data = encodeFunctionData({
-        abi: testDexAbi, functionName: 'swap', args: [m.wrapper, amt, m.wrapperPrice],
-      });
-      const minOut = ((amt * 10n ** 18n) / m.wrapperPrice) * 98n / 100n;
+      const { target: dex, data, minOut } = swapCall(m, 'buy', amt);
       setStatus('Approving…');
       await ensureAllowance(address, TOKENS.USDC, zap, amt);
       setStatus('Buying and opening…');

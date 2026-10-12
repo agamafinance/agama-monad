@@ -2,7 +2,7 @@
 
 import { encodeFunctionData, type Address, type Hex } from 'viem';
 
-import { ADDR, BPS } from './config';
+import { ADDR, BPS, KURU_VENUE } from './config';
 import { type Market } from './useMonad';
 
 /// One hop of a stock loop, the shape `AgamaAccount.Hop` takes.
@@ -27,31 +27,58 @@ const testDexAbi = [
   },
 ] as const;
 
+const kuruVenueAbi = [
+  {
+    type: 'function', name: 'buy', stateMutability: 'nonpayable',
+    inputs: [{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function', name: 'sell', stateMutability: 'nonpayable',
+    inputs: [{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const;
+
 const ONE = 10n ** 18n;
-/// What the stand-in venue keeps, and the slack a quote is sized with.
+/// What the venue keeps (Kuru's book spread around the oracle, or the
+/// stand-in's fee), and the slack a quote is sized with.
 const VENUE_SPREAD_BPS = 30n;
 const SLIPPAGE_BPS = 200n;
 
-/// A quote for one exact amount, from the venue this deployment has: the
-/// oracle-priced stand-in router deployed with the stack. A loop needs one
-/// quote per hop, because a route is built for one exact input.
-async function quote(m: Market, side: 'buy' | 'sell', amount: bigint): Promise<Hop> {
-  const dex = ADDR.testDexRouter;
-  if (!dex) throw new Error('No swap venue in this deployment');
+/// One swap through the deployment's venue: a market order on Kuru's book via
+/// KuruVenue when the deployment has it, else the oracle-priced stand-in.
+/// `amount` is USDC on a buy, wrapped stock on a sell.
+export function swapCall(m: Market, side: 'buy' | 'sell', amount: bigint): { target: Address; data: Hex; minOut: bigint } {
   const out = side === 'buy'
     ? (amount * ONE) / m.wrapperPrice
     : (amount * m.wrapperPrice) / ONE;
+  const minOut = (out * (BPS - SLIPPAGE_BPS)) / BPS;
+  if (KURU_VENUE) {
+    return {
+      target: KURU_VENUE,
+      data: encodeFunctionData({ abi: kuruVenueAbi, functionName: side, args: [m.wrapper, amount, minOut] }),
+      minOut,
+    };
+  }
+  const dex = ADDR.testDexRouter;
+  if (!dex) throw new Error('No swap venue in this deployment');
   return {
-    amount,
-    swapTarget: dex,
-    swapSpender: dex,
-    swapData: encodeFunctionData({
+    target: dex,
+    data: encodeFunctionData({
       abi: testDexAbi,
       functionName: side === 'buy' ? 'swap' : 'sell',
       args: [m.wrapper, amount, m.wrapperPrice],
     }),
-    minOut: (out * (BPS - SLIPPAGE_BPS)) / BPS,
+    minOut,
   };
+}
+
+/// A quote for one exact amount. A loop needs one per hop, because a market
+/// order is sized for one exact input.
+async function quote(m: Market, side: 'buy' | 'sell', amount: bigint): Promise<Hop> {
+  const { target, data, minOut } = swapCall(m, side, amount);
+  return { amount, swapTarget: target, swapSpender: target, swapData: data, minOut };
 }
 
 export interface OpenPlan {

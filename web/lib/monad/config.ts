@@ -42,6 +42,10 @@ export const ADDR = zeroed(D?.contracts, [
   'oracle', 'agUSD', 'sagUSD', 'queue', 'pool', 'stabilityPool', 'factory', 'earnRouter', 'amplifyRouter',
 ]) as Deployment['contracts'];
 export const TOKENS = zeroed(D?.tokens, ['USDC', 'wTSLAx', 'wNVDAx', 'wSPYx', 'wAAPLx']) as Deployment['tokens'];
+/// Where stock is bought and sold: Kuru's order book through our venue when the
+/// deployment has it, else the stand-in router priced at the oracle.
+export const KURU_VENUE = D?.kuru?.venue;
+export const KURU_BOOKS = D?.kuru;
 export const ADAPTERS = zeroed(D?.adapters, ['TSLA', 'NVDA', 'SPY', 'AAPL', 'VAULT']) as Deployment['adapters'];
 
 export const EXPLORER = monadChain.blockExplorers.default.url;

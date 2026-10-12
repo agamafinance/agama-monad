@@ -21,8 +21,6 @@ export type Deployment = {
     /// Chainlink Data Streams VerifierProxy the oracle verifies reports against.
     verifierProxy?: Address;
     creReceiver?: Address;
-    /// Kuru venue (buys and sells the xStock on its order book), when deployed.
-    kuruVenue?: Address;
   };
   adapters: Record<StockKey | "VAULT", Address>;
   tokens: {
@@ -32,8 +30,9 @@ export type Deployment = {
     wSPYx: Address;
     wAAPLx: Address;
   };
-  /// Kuru order book per stock (base xStock / USDC), when deployed.
-  kuru?: Partial<Record<StockKey, Address>>;
+  /// Kuru: the venue every swap goes through, and the order book per stock
+  /// (base xStock / USDC), when deployed.
+  kuru?: Partial<Record<StockKey | 'venue' | 'router' | 'marginAccount', Address>>;
   admin: Address;
   keeper: Address;
   deployedAtBlock: number;

@@ -145,8 +145,9 @@ export default function MonadAmplifyPage() {
           </h1>
           <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
             Deposit a tokenized stock and the protocol borrows USDC against it, buys more of the same
-            stock, and deposits that too, until the level you asked for. One transaction. How far it can
-            go is the market&apos;s own LTV ceiling, not a number we chose.
+            stock on Kuru&apos;s on-chain order book, and deposits that too, until the level you asked
+            for. One transaction. How far it can go is the market&apos;s own LTV ceiling, not a number
+            we chose.
           </p>
           <PriceBadge markets={markets} />
 
