@@ -80,7 +80,7 @@ def call(to, sig, *args, rpc=RPC):
     return cast("call", to, sig, *args, rpc=rpc)
 
 
-def send(to, sig, *args, gas=DEFAULT_GAS):
+def send(to, sig, *args, gas=DEFAULT_GAS, estimate=True):
     """`sig` may be a signature plus args, or a full calldata hex blob.
 
     Always checks the receipt: a mined-but-reverted transaction must never be
@@ -90,8 +90,11 @@ def send(to, sig, *args, gas=DEFAULT_GAS):
         raise RuntimeError("KEEPER_KEY not set")
     # Estimated first: a revert costs nothing, and the limit billed is the
     # estimate plus a margin, never more than the cap for this kind of call.
-    est = first_int(cast("estimate", to, sig, *args, "--from", keeper_address()))
-    gas = min(gas, est * 13 // 10)
+    # Not for price pushes: a report observed after the last block would read
+    # as from the future there, though it is fine in the block it lands in.
+    if estimate:
+        est = first_int(cast("estimate", to, sig, *args, "--from", keeper_address()))
+        gas = min(gas, est * 13 // 10)
     for attempt in range(6):
         try:
             out = cast("send", to, sig, *args, "--private-key", KEY,
@@ -200,7 +203,8 @@ def tick_prices(dep):
     if not reports:
         log("prices: nothing newer")
         return
-    send(oracle, "pushReports(bytes[])", "[" + ",".join(reports) + "]", gas=GAS_PRICE_PUSH)
+    send(oracle, "pushReports(bytes[])", "[" + ",".join(reports) + "]", gas=GAS_PRICE_PUSH,
+         estimate=False)
     log("prices verified on chain:", ", ".join(summary))
 
 
