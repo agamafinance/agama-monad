@@ -102,17 +102,9 @@ export function Status({ text, hash }: { text?: string; hash?: string }) {
   );
 }
 
-/// The selected stock, its price and what the market lends against it.
-/// `extra` replaces the LTV line, for a page that has a better number to say.
 export function MarketCards({
-  markets, sel, onSelect, connected, extra,
-}: {
-  markets: Market[];
-  sel: number;
-  onSelect: (i: number) => void;
-  connected: boolean;
-  extra?: (m: Market) => string;
-}) {
+  markets, sel, onSelect, connected,
+}: { markets: Market[]; sel: number; onSelect: (i: number) => void; connected: boolean }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {markets.map((m, i) => (
@@ -139,7 +131,7 @@ export function MarketCards({
             <span className="text-[11px] opacity-70">{m.observedAt ? ago(m.observedAt) : 'no price yet'}</span>
           </div>
           <div className="mt-1 text-[11px] opacity-70">
-            {extra ? extra(m) : `Max LTV ${pct(m.maxLtv)}`}
+            Max LTV {pct(m.maxLtv)}
             {m.marketOpen ? '' : ' · last close'}
             {connected && m.baseBalance > 0n ? ` · ${qty(m.baseBalance, 2)} held` : ''}
           </div>
@@ -268,5 +260,17 @@ export function GasNotice({ address, mon }: { address: Address | undefined; mon:
       </button>
       , then open the Faucet tab.
     </div>
+  );
+}
+
+/// What is real on this testnet and what is a stand-in, under every page that
+/// trades.
+export function TestnetNote() {
+  return (
+    <p className="text-[12px] text-fg-muted">
+      Testnet: the stocks and USDC are stand-ins from the Faucet tab, under the real xStocks&apos; tickers (TSLAx,
+      NVDAx, SPYx and AAPLx, as on Monad mainnet); no xStock faucet exists on testnet. Prices are real: Chainlink
+      Data Streams reports, verified on chain by Chainlink&apos;s Verifier. Trades fill on Kuru&apos;s order book.
+    </p>
   );
 }

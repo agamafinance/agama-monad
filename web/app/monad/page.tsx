@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatUnits, parseUnits } from 'viem';
 import { swapCall } from '@/lib/monad/loop';
 
@@ -11,414 +11,346 @@ import {
   type Market,
 } from '@/lib/monad/useMonad';
 import { useMonadWallet } from '@/lib/monad/WalletProvider';
-import { TokenIcon } from '@/components/icons/TokenIcon';
 import { NotDeployed, PriceBadge } from '@/components/PriceBadge';
 import { ago, useDepositBaseline, useLastAgentAction } from '@/lib/monad/agents';
-
-const pct = (bps: bigint | undefined) => (bps === undefined ? '-' : `${Number(bps) / 100}%`);
-const usd = (v: bigint | undefined) =>
-  v === undefined ? '-' : `$${Number(formatUnits(v, USDC_DECIMALS)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
-const qty = (v: bigint | undefined, dp = 4) =>
-  v === undefined ? '-' : Number(formatUnits(v, STOCK_DECIMALS)).toFixed(dp);
-const rayPct = (v: bigint | undefined) => (v === undefined ? '-' : `${(Number(v) / Number(RAY) * 100).toFixed(2)}%`);
-const price = (v: bigint | undefined) =>
-  v === undefined || v === 0n ? '-' : `$${Number(formatUnits(v, 18)).toFixed(2)}`;
+import {
+  AgentsCard, AmountBox, card, GasNotice, Hero, MarketCards, Panel, parseAmount, pct, price, primaryBtn, qty,
+  rayPct, Row, secondaryBtn, SessionBadge, Stat, Status, Step, TestnetNote, usd, useMonBalance,
+} from '@/components/monad/ui';
 
 export default function MonadEarnPage() {
   const { address, connect } = useMonadWallet();
   const { markets, refresh } = useMonadMarkets(address);
   const [tick, bumpTick] = useTick();
   const [sel, setSel] = useState(0);
+  // Open on the stock asked for (?s=NVDA, from Portfolio).
+  const [opened, setOpened] = useState(false);
+  useEffect(() => {
+    if (opened || !markets.length) return;
+    const want = new URLSearchParams(window.location.search).get('s');
+    const i = want ? markets.findIndex((mk) => mk.stock.key === want) : -1;
+    if (i >= 0) setSel(i);
+    setOpened(true);
+  }, [markets, opened]);
   const m: Market | undefined = markets[sel];
 
   const proto = useMonadProtocol(address, tick);
   const position = useMonadPosition(address, m?.adapter, m?.wrapper, tick);
+  const mon = useMonBalance(address, tick);
 
   const [amount, setAmount] = useState('');
   const [buying, setBuying] = useState(false);
+  // The slider is in bps of LTV. Undefined until the market says what it
+  // allows, then a level that leaves the position well clear of liquidation.
+  const [picked, setPicked] = useState<number>();
+  useEffect(() => setPicked(undefined), [sel]);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('');
   // Which card the running action belongs to, so its result is reported under
   // the button that was pressed and not in the card next to it.
-  const [pending, setPending] = useState<'deposit' | 'close'>('deposit');
+  const [status, setStatus] = useState<{ text: string; hash?: string; where: 'deposit' | 'close' }>();
 
   // The app only ever speaks the base token: the xStock people hold, and what
   // closing hands back. The ERC-4626 wrapper the markets hold is wrapped and
   // unwrapped on the way through, and never named.
   const token = m?.base;
-  const balance = m?.baseBalance;
+  const balance = m?.baseBalance ?? 0n;
   const symbol = m?.stock.base ?? '';
+  const has = !!position?.hasPosition;
 
-  const amt = useMemo(() => {
-    try {
-      return amount ? parseUnits(amount, buying ? USDC_DECIMALS : STOCK_DECIMALS) : 0n;
-    } catch {
-      return 0n;
-    }
-  }, [amount, buying]);
+  const amt = parseAmount(amount, buying ? USDC_DECIMALS : STOCK_DECIMALS);
+  const spendable = buying ? (proto?.usdc ?? 0n) : balance;
+  const enough = amt <= spendable;
 
+  // Nothing can be borrowed against a stale price, so the level is 0 until
+  // the next one lands. Otherwise the market's ceiling, which is already
+  // lowered while the session is closed, caps whatever the slider says.
   const canBorrow = m ? m.borrowAllowed : true;
+  const maxLtv = m ? Number(m.maxLtv) : 0;
+  const defaultLtv = Math.floor((maxLtv * 0.8) / 50) * 50;
+  const target = position && position.targetLtvBps > 0n ? Number(position.targetLtvBps) : undefined;
+  const ltv = canBorrow ? Math.min(picked ?? target ?? defaultLtv, maxLtv) : 0;
+  const ltvBps = BigInt(ltv);
 
-  // The level is not a question for the user. Every market is opened at the
-  // same safety margin, a health factor of 1.60, which is the liquidation
-  // threshold divided by 1.6, and never above what the market allows. On
-  // TSLA's 40% threshold that is the 25% this used to default to; on SPY's
-  // 60% it is 37.5%, because a broad index can carry more and should.
-  const OPEN_HF = 16_000n; // 1.60 in bps
-  const autoLtvBps = m
-    ? (m.liqThreshold * BPS / OPEN_HF < m.maxLtv ? m.liqThreshold * BPS / OPEN_HF : m.maxLtv)
-    : 0n;
-  const ltvBps = canBorrow ? autoLtvBps : 0n;
-  const borrowed = m && amt > 0n ? (amt * m.price / 10n ** 18n) * ltvBps / BPS : 0n;
-  const borrowedUsdc = borrowed / 10n ** 12n; // 18 -> 6 decimals
+  // What the deposit is worth in USDC: what is spent on a buy, the stock at
+  // the oracle otherwise (18 + 18 decimals down to 6).
+  const value = buying ? amt : m ? (amt * m.price) / 10n ** 30n : 0n;
+  const borrowed = (value * ltvBps) / BPS;
   const spread = proto ? proto.vaultApy - proto.borrowRate : undefined;
   const extra = spread !== undefined ? (spread * ltvBps) / BPS : undefined;
+  const healthAtOpen = m && ltv > 0 ? (Number(m.liqThreshold) / ltv).toFixed(2) : '-';
 
   const bump = () => { bumpTick(); refresh(); };
 
+  /// Every action reports under its own button, and ends with a re-read.
+  async function run(where: 'deposit' | 'close', act: () => Promise<`0x${string}`>) {
+    if (!address) return setStatus({ text: 'Connect a wallet first.', where });
+    if (!m) return setStatus({ text: 'Markets are still loading.', where });
+    setBusy(true);
+    try {
+      const hash = await act();
+      setStatus({ text: 'Done.', hash, where });
+      if (where === 'deposit') setAmount('');
+      if (where === 'close') resetBaseline();
+    } catch (e: unknown) {
+      setStatus({ text: errorText(e), where });
+    } finally {
+      setBusy(false);
+      bump();
+    }
+  }
+
   /// Buy the stock and open the position in one transaction, through the
   /// venue allowlisted on the zap.
-  async function buyAndEarn() {
-    if (!address || !m) return;
-    setPending('deposit');
-    const zap = ADDR.zapRouter;
-    if (!zap) { setStatus('No swap venue on this network'); return; }
-    setBusy(true);
-    try {
-      if (!m.wrapperPrice) throw new Error('No price yet');
-      const { target: dex, data, minOut } = swapCall(m, 'buy', amt);
-      setStatus('Approving…');
-      await ensureAllowance(address, TOKENS.USDC, zap, amt);
-      setStatus('Buying and opening…');
-      await send(address, zap, zapRouterAbi, 'buyAndEarn',
-        [amt, dex, dex, data, m.adapter, minOut, ltvBps]);
-      setStatus('Done');
-      setAmount('');
-      bump();
-    } catch (e: unknown) {
-      setStatus(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const buyAndEarn = () =>
+    run('deposit', async () => {
+      const zap = ADDR.zapRouter;
+      if (!zap) throw new Error('No swap venue on this network');
+      if (!m!.wrapperPrice) throw new Error('No price yet');
+      const { target: dex, data, minOut } = swapCall(m!, 'buy', amt);
+      setStatus({ text: 'Approving USDC...', where: 'deposit' });
+      await ensureAllowance(address!, TOKENS.USDC, zap, amt);
+      setStatus({ text: 'Buying on Kuru and opening...', where: 'deposit' });
+      return send(address!, zap, zapRouterAbi, 'buyAndEarn', [amt, dex, dex, data, m!.adapter, minOut, ltvBps]);
+    });
 
-  async function open() {
-    if (!address || !m || !token) return;
-    setPending('deposit');
-    setBusy(true);
-    try {
-      setStatus('Approving…');
-      await ensureAllowance(address, token, ADDR.earnRouter, amt);
-      setStatus('Opening the position…');
-      await send(address, ADDR.earnRouter, earnRouterAbi, 'openWithBase',
-        [m.adapter, amt, ltvBps]);
-      setStatus('Done');
-      setAmount('');
-      bump();
-    } catch (e: unknown) {
-      setStatus(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const deposit = () =>
+    run('deposit', async () => {
+      setStatus({ text: `Approving ${symbol}...`, where: 'deposit' });
+      await ensureAllowance(address!, token!, ADDR.earnRouter, amt);
+      setStatus({ text: 'Depositing and borrowing...', where: 'deposit' });
+      return send(address!, ADDR.earnRouter, earnRouterAbi, 'openWithBase', [m!.adapter, amt, ltvBps]);
+    });
 
-  async function close() {
-    if (!address || !m) return;
-    setPending('close');
-    setBusy(true);
-    try {
-      setStatus('Closing…');
+  const close = () =>
+    run('close', async () => {
       // A few wei of interest can accrue between the read and the block, so the
       // router is allowed to pull a tiny top-up from the wallet.
       const topUp = parseUnits('1', USDC_DECIMALS);
-      await ensureAllowance(address, TOKENS.USDC, ADDR.earnRouter, topUp);
-      await send(address, ADDR.earnRouter, earnRouterAbi, 'closeToBaseWithTopUp', [m.adapter, topUp]);
-      setStatus('Done');
-      resetBaseline();
-      bump();
-    } catch (e: unknown) {
-      setStatus(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+      setStatus({ text: 'Approving the top-up...', where: 'close' });
+      await ensureAllowance(address!, TOKENS.USDC, ADDR.earnRouter, topUp);
+      setStatus({ text: 'Closing...', where: 'close' });
+      return send(address!, ADDR.earnRouter, earnRouterAbi, 'closeToBaseWithTopUp', [m!.adapter, topUp]);
+    });
 
-  const has = !!position?.hasPosition;
   const { grown, reset: resetBaseline } = useDepositBaseline(
     `agama.monad.deposited.${address ?? 'none'}.${m?.adapter ?? 'none'}`,
     position?.collateralBase,
   );
   const lastAction = useLastAgentAction(has ? position?.account : undefined, tick);
+  const health = position && position.healthFactorRay > 0n && position.debt > 0n
+    ? (Number(position.healthFactorRay) / Number(RAY)).toFixed(2)
+    : undefined;
+  const levelNow = position && position.collateralValue > 0n ? (position.debt * BPS) / position.collateralValue : undefined;
+  // There is no call that moves the target of an open position on its own:
+  // adding to it is what does, at the blended level of the whole position.
+  const sliderMoved = has && target !== undefined && picked !== undefined && ltv !== target;
 
   return (
     <>
-      <section className="px-6 md:px-24 pt-10 md:pt-14 pb-8">
-        <div className="max-w-[1400px] mx-auto relative">
-          {/* The house coin pair, struck with the stocks this page is about. */}
-          <div aria-hidden className="pointer-events-none absolute right-0 -top-2 z-20 hidden lg:block">
-            <img src={asset('/logos/coin-pair-earn.svg')} alt="" className="h-[300px] w-auto" />
-          </div>
-
-          <h1 className="mt-3 text-[34px] md:text-[44px] leading-[1.05] text-fg font-semibold">
+      <Hero
+        art={asset('/logos/coin-pair-earn.svg')}
+        title={
+          <>
             Deposit your stock,
             <br />
             get more stock
-          </h1>
-          <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
-            Deposit a tokenized stock. Agama borrows USDC against it at a safe level, puts it to work in
-            the private-credit vault, and permissionless agents turn that yield back into more of your
-            stock. Nothing to set, nothing to come back for. Live on Monad Testnet.
-          </p>
-          <PriceBadge markets={markets} />
-
-          <div className="mt-7 flex flex-wrap gap-8">
-            <Stat label="Vault APY" value={rayPct(proto?.vaultApy)} sub={proto?.vaultApyIsTarget ? 'Target, not yet measured' : 'Realized'} />
-            <Stat label="Borrow APR" value={rayPct(proto?.borrowRate)} sub="USDC, variable" />
-            <Stat label="Spread you earn" value={rayPct(spread)} sub="On every USDC borrowed" />
-          </div>
+          </>
+        }
+      >
+        <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
+          Deposit a tokenized stock. Agama borrows USDC against it at the level you pick, puts it to work in the
+          private-credit vault, and permissionless agents hold that level and turn the yield back into more of your
+          stock. Live on Monad Testnet, with stand-in tokens priced off the real xStocks.
+        </p>
+        <div className="mt-7 flex flex-wrap gap-8">
+          <Stat
+            label="Vault APY"
+            value={rayPct(proto?.vaultApy)}
+            sub={proto?.vaultApyIsTarget ? 'Private credit, target rate' : 'Private credit, realized'}
+          />
+          <Stat label="Borrow APR" value={rayPct(proto?.borrowRate)} sub="USDC, variable" />
+          <Stat label="Spread you earn" value={rayPct(spread)} sub="On every USDC borrowed" />
         </div>
-      </section>
+      </Hero>
 
-      <section className="vault-panel relative z-10 rounded-t-[20px] px-6 md:px-24 pt-10 md:pt-14 pb-24">
-        <div className="max-w-[1400px] mx-auto space-y-5">
-          <NotDeployed />
-          <MarketCards markets={markets} sel={sel} onSelect={setSel} connected={!!address} />
+      <Panel>
+        <NotDeployed />
+        <GasNotice address={address} mon={mon} />
+        <MarketCards markets={markets} sel={sel} onSelect={setSel} connected={!!address} />
+        {markets.length > 0 && <PriceBadge markets={markets} />}
 
-          <div className="grid gap-5 lg:grid-cols-[1fr_1fr] items-start">
-            <div className="rounded-2xl bg-[#fdfaf1] p-6 shadow-[0_1px_3px_rgba(20,50,35,0.06),0_10px_30px_rgba(20,50,35,0.09)]">
-              <div className="flex items-center justify-between">
-                <h2 className="text-[17px] font-semibold text-fg">Deposit {m?.stock.base ?? ''}</h2>
-                {m && (
-                  <span className={m.marketOpen ? 'rounded-full bg-[#254839]/[0.06] px-3 py-1 text-[12px] text-fg' : 'rounded-full bg-[#b4571f]/10 px-3 py-1 text-[12px] text-[#b4571f]'}>
-                    {m.marketOpen ? 'Live price' : 'No live price'}
-                  </span>
-                )}
+        <div className="grid gap-5 lg:grid-cols-[1fr_1fr] items-start">
+          <div className={card}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-[17px] font-semibold text-fg">Deposit {symbol}</h2>
+              <SessionBadge m={m} />
+            </div>
+
+            <div className="mt-4 flex items-center gap-1 rounded-full bg-[#254839]/[0.06] p-1 w-fit">
+              {([[false, 'Deposit'], [true, 'Buy and Earn']] as const).map(([v, label]) => (
+                <button
+                  key={label}
+                  onClick={() => { setBuying(v); setAmount(''); }}
+                  className={
+                    v === buying
+                      ? 'rounded-full bg-[#254839] px-4 py-1.5 text-[13px] font-medium text-[#fdf8ed]'
+                      : 'rounded-full px-4 py-1.5 text-[13px] text-fg-muted hover:text-fg'
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[12px] text-fg-muted">
+              {buying
+                ? `Do not hold ${symbol || 'the stock'} yet? One transaction buys it on Kuru's order book and opens the position with it.`
+                : `Deposit ${symbol || 'your stock'} as it is. Closing hands the same token back.`}
+            </p>
+
+            <AmountBox
+              label={buying ? 'Spend' : 'Deposit'}
+              balanceLabel={buying ? usd(proto?.usdc).replace('$', '') : qty(balance)}
+              onMax={() => setAmount(formatUnits(spendable, buying ? USDC_DECIMALS : STOCK_DECIMALS))}
+              value={amount}
+              onChange={setAmount}
+              unit={buying ? 'USDC' : symbol}
+              hint={
+                buying && amt > 0n && m?.wrapperPrice
+                  ? `about ${qty((amt * 10n ** 18n) / m.wrapperPrice)} ${symbol} at ${price(m.price)}`
+                  : `${price(m?.price)} per share`
+              }
+            />
+
+            <div className="mt-5">
+              <div className="flex items-center justify-between text-[13px]">
+                <span className="text-fg-muted">Level the agents hold</span>
+                <span className="font-medium text-fg tabular-nums" data-testid="ltv">
+                  {pct(ltv)} of the stock
+                </span>
               </div>
-
-              <div className="mt-4 flex items-center gap-1 rounded-full bg-[#254839]/[0.06] p-1 w-fit">
-                {([[false, 'Deposit'], [true, 'Buy and Earn']] as const).map(([v, label]) => (
-                  <button
-                    key={label}
-                    onClick={() => { setBuying(v); setAmount(''); }}
-                    className={
-                      v === buying
-                        ? 'rounded-full bg-[#254839] px-4 py-1.5 text-[13px] font-medium text-[#fdf8ed]'
-                        : 'rounded-full px-4 py-1.5 text-[13px] text-fg-muted hover:text-fg'
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
+              <input
+                type="range"
+                min={0}
+                max={maxLtv}
+                step={50}
+                value={ltv}
+                disabled={!canBorrow}
+                onChange={(e) => setPicked(Number(e.target.value))}
+                className="mt-2 w-full accent-[#254839] disabled:opacity-45"
+                aria-label="Target LTV"
+              />
+              <div className="flex justify-between text-[11px] text-fg-muted">
+                <span>0%</span>
+                <span>{pct(maxLtv)} max{m && !m.marketOpen ? ', lowered while the market is closed' : ''}</span>
               </div>
+            </div>
 
-              <p className="mt-2 text-[12px] text-fg-muted">
-                {buying
-                  ? 'Do not hold the stock yet? One transaction buys it and opens the position with it.'
-                  : `Deposit ${symbol || 'your stock'} as it is. Closing hands the same token back.`}
+            <dl className="mt-4 space-y-2 text-[13px]">
+              <Row label="Borrowed into the vault" value={borrowed > 0n ? usd(borrowed) : '-'} />
+              <Row label="Extra yield on the stock" value={extra !== undefined && ltv > 0 ? `${rayPct(extra)} a year` : '-'} />
+              <Row label="Health factor at open" value={healthAtOpen} />
+            </dl>
+            {m && !m.marketOpen && canBorrow && (
+              <p className="mt-3 text-[12px] text-fg-muted">
+                The market for {symbol} is closed, so this is its last close, signed by Chainlink. The max level and
+                the liquidation threshold are both lowered until the session reopens, which keeps a position opened
+                now the same distance from liquidation.
               </p>
+            )}
+            {m && !canBorrow && (
+              <p className="mt-3 text-[12px] text-[#b4571f]">
+                No fresh price for {symbol}: borrowing waits for the next one. A deposit now goes in as collateral
+                with nothing borrowed.
+              </p>
+            )}
 
-              <div className="mt-4 rounded-2xl border border-[#254839]/12 bg-white/60 p-4">
-                <div className="flex items-center justify-between text-[12px] text-fg-muted">
-                  <span>{buying ? 'Spend' : 'Deposit'}</span>
-                  <button
-                    onClick={() => setAmount(formatUnits(buying ? (proto?.usdc ?? 0n) : (balance ?? 0n), buying ? USDC_DECIMALS : STOCK_DECIMALS))}
-                    className="hover:text-fg"
-                  >
-                    Balance {buying
-                      ? Number(formatUnits(proto?.usdc ?? 0n, USDC_DECIMALS)).toFixed(2)
-                      : qty(balance)} · Max
-                  </button>
-                </div>
-                <div className="mt-1.5 flex items-center justify-between">
-                  <input
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full bg-transparent text-[28px] font-semibold text-fg tabular-nums outline-none placeholder:text-fg-muted/40"
+            <button
+              onClick={address ? (buying ? buyAndEarn : deposit) : () => connect()}
+              disabled={busy || (!!address && (!m || amt === 0n || !enough || (canBorrow && ltv === 0)))}
+              className={`mt-4 ${primaryBtn}`}
+            >
+              {!address
+                ? 'Connect Wallet'
+                : busy && status?.where === 'deposit'
+                  ? <Step text={status.text} />
+                  : !m
+                    ? 'Loading markets...'
+                    : !enough
+                      ? `Not enough ${buying ? 'USDC' : symbol}, see the Faucet`
+                      : amt === 0n
+                        ? 'Enter an amount'
+                        : buying
+                          ? 'Buy and earn'
+                          : !canBorrow
+                            ? 'Deposit as collateral'
+                            : has
+                              ? 'Add to the position'
+                              : 'Deposit and start earning'}
+            </button>
+            {!busy && status?.where === 'deposit' && <Status text={status.text} hash={status.hash} />}
+          </div>
+
+          <div className={card}>
+            <h2 className="text-[17px] font-semibold text-fg">Your position</h2>
+            {!has ? (
+              <p className="mt-4 text-[14px] text-fg-muted">
+                Nothing here yet. Deposit a stock and the protocol does the rest: it borrows against it, puts the USDC
+                to work, and keeps the position where you set it.
+              </p>
+            ) : (
+              <>
+                <div className="mt-4 flex flex-wrap gap-8">
+                  <Stat
+                    label={`Your ${symbol}`}
+                    value={qty(position?.collateralBase)}
+                    sub={grown !== undefined ? `+${qty(grown)} added by the agents` : usd(position?.collateralValue)}
                   />
-                  <span className="shrink-0 rounded-full bg-[#254839]/[0.06] px-3 py-1.5 text-[14px] font-medium text-fg">
-                    {buying ? 'USDC' : symbol}
-                  </span>
+                  <Stat label="Health factor" value={health ?? 'No debt'} sub="Liquidation below 1.00" />
                 </div>
-                <div className="mt-1 text-[12px] text-fg-muted">
-                  {buying && amt > 0n && m?.wrapperPrice
-                    ? `about ${qty((amt * 10n ** 18n) / m.wrapperPrice)} ${m.stock.base} at ${price(m?.price)}`
-                    : `${price(m?.price)} per share`}
-                </div>
-              </div>
-
-              <dl className="mt-4 space-y-2 text-[13px]">
-                <Row
-                  label="Borrowed into the vault"
-                  value={borrowedUsdc > 0n ? `${usd(borrowedUsdc)} · ${pct(ltvBps)} of the stock` : '-'}
-                />
-                <Row label="Extra yield on the stock" value={extra !== undefined && ltvBps > 0n ? `${rayPct(extra)} a year` : '-'} />
-                <Row label="Health factor at open" value={canBorrow ? '1.60' : 'No price'} />
-              </dl>
-              {m && !m.marketOpen && canBorrow && (
+                <dl className="mt-5 space-y-2 text-[13px]">
+                  <Row label="Debt" value={usd(position?.debt)} />
+                  <Row label="Yield buffer in the vault" value={usd(position?.redeemable)} />
+                  <Row label="Level now" value={pct(levelNow)} />
+                  <Row label="Target level" value={pct(position?.targetLtvBps)} />
+                </dl>
+                {sliderMoved && (
+                  <p className="mt-3 text-[12px] text-fg-muted">
+                    The target of an open position moves when you add to it: the new {symbol} is borrowed against at{' '}
+                    {pct(ltv)}, and the target becomes the level of the whole position.
+                  </p>
+                )}
+                <AgentsCard
+                  last={
+                    lastAction
+                      ? lastAction.kind === 'rebalance'
+                        ? `Last action: debt ${(lastAction.debtDelta ?? 0n) >= 0n ? '+' : '-'}${usd(
+                            (lastAction.debtDelta ?? 0n) < 0n ? -(lastAction.debtDelta ?? 0n) : lastAction.debtDelta ?? 0n,
+                          ).replace('$', '')} USDC, ${ago(lastAction.at)}.`
+                        : `Last action: ${qty(lastAction.stockAdded)} ${symbol} bought with the yield, ${ago(lastAction.at)}.`
+                      : 'No agent action in the last few minutes. The position is on target.'
+                  }
+                >
+                  The stock moves, the debt follows it back to {pct(position?.targetLtvBps)}. The vault yield above
+                  that debt is bought back as more stock on Kuru. A keeper makes the calls every minute, and the
+                  calls are open to anyone: nothing here is yours to do, and nothing here is ours to control.
+                </AgentsCard>
                 <p className="mt-3 text-[12px] text-fg-muted">
-                  The market for {m.stock.base} is closed, so this is its last close, signed by Chainlink.
-                  Deposit and borrow all the same, at {pct(m.maxLtv)} rather than the usual level, which
-                  leaves the position the same distance from liquidation until the session reopens.
+                  Closing repays the debt from the yield buffer and hands the {symbol} back to your wallet, in one
+                  transaction. If the buffer falls short, up to 1 USDC of the difference comes from your wallet.
                 </p>
-              )}
-              {!canBorrow && (
-                <p className="mt-3 text-[12px] text-[#b4571f]">
-                  Nobody has priced this stock recently enough to lend against it. Your stock still goes in
-                  as collateral, and the agents start borrowing the moment a fresh price lands.
-                </p>
-              )}
-
-              <button
-                onClick={address ? (buying ? buyAndEarn : open) : () => connect()}
-                disabled={
-                  busy ||
-                  (!!address && (amt === 0n || amt > (buying ? (proto?.usdc ?? 0n) : (balance ?? 0n))))
-                }
-                className="mt-4 w-full rounded-full bg-[#254839] px-5 py-3.5 text-[15px] font-medium text-[#fdf8ed] transition-colors hover:bg-[#1F3D31] disabled:opacity-45"
-              >
-                {!address
-                  ? 'Connect Wallet'
-                  : busy
-                    ? status || 'Working…'
-                    : buying
-                      ? 'Buy and earn'
-                      : canBorrow
-                        ? 'Deposit and start earning'
-                        : 'Deposit as collateral'}
-              </button>
-              {status && !busy && pending === 'deposit' && (
-                <p className="mt-2 text-[12px] text-fg-muted">{status}</p>
-              )}
-            </div>
-
-            <div className="rounded-2xl bg-[#fdfaf1] p-6 shadow-[0_1px_3px_rgba(20,50,35,0.06),0_10px_30px_rgba(20,50,35,0.09)]">
-              <h2 className="text-[17px] font-semibold text-fg">Your position</h2>
-
-              {!has ? (
-                <p className="mt-4 text-[14px] text-fg-muted">
-                  Nothing here yet. Deposit a stock and the protocol does the rest: it borrows against it,
-                  puts the USDC to work, and keeps the position where it should be.
-                </p>
-              ) : (
-                <>
-                  <div className="mt-4 flex flex-wrap gap-8">
-                    <Stat
-                      label={`Your ${m?.stock.base}`}
-                      value={qty(position?.collateralBase)}
-                      sub={grown !== undefined ? `+${qty(grown)} added by the agents` : usd(position?.collateralValue)}
-                    />
-                    <Stat
-                      label="Health factor"
-                      value={position && position.healthFactorRay > 0n ? (Number(position.healthFactorRay) / Number(RAY)).toFixed(2) : 'No debt'}
-                      sub="Agents act at 1.15"
-                    />
-                  </div>
-                  <dl className="mt-5 space-y-2 text-[13px]">
-                    <Row label="Debt" value={usd(position?.debt)} />
-                    <Row label="Yield buffer" value={usd(position?.redeemable)} />
-                    <Row label="Target level" value={pct(position?.targetLtvBps)} />
-                  </dl>
-                  <div className="mt-4 rounded-2xl border border-[#254839]/12 bg-white/60 p-4">
-                    <div className="flex items-center gap-2">
-                      <span className="relative flex h-2 w-2" aria-hidden>
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#254839] opacity-60" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-[#254839]" />
-                      </span>
-                      <span className="text-[13px] font-medium text-fg">Agents running</span>
-                    </div>
-                    <p className="mt-1.5 text-[13px] text-fg-muted">
-                      The stock moves, the debt follows it back to {pct(position?.targetLtvBps)}. The vault
-                      yield above that debt is bought back as more stock. Nothing here is yours to do, and
-                      nothing here is ours to control: the calls are open to anyone.
-                    </p>
-                    <p className="mt-2 text-[12px] text-fg-muted">
-                      {lastAction
-                        ? lastAction.kind === 'rebalance'
-                          ? `Last action: debt ${(lastAction.debtDelta ?? 0n) >= 0n ? '+' : '-'}${usd(
-                              (lastAction.debtDelta ?? 0n) < 0n ? -(lastAction.debtDelta ?? 0n) : lastAction.debtDelta ?? 0n,
-                            ).replace('$', '')} USDC, ${ago(lastAction.at)}`
-                          : `Last action: ${qty(lastAction.stockAdded)} ${m?.stock.base} bought with the yield, ${ago(lastAction.at)}`
-                        : 'No action in the last few minutes. The position is on target.'}
-                    </p>
-                  </div>
-                  <button
-                    onClick={close}
-                    disabled={busy}
-                    className="mt-4 w-full rounded-full border border-[#254839]/25 px-5 py-3.5 text-[15px] font-medium text-fg transition-colors hover:bg-[#254839]/[0.06] disabled:opacity-45"
-                  >
-                    Close, get the stock back
-                  </button>
-                </>
-              )}
-              {/* Outside the branch on purpose: closing empties this card, and
-                  a confirmation that unmounts with it confirms nothing. */}
-              {status && !busy && pending === 'close' && (
-                <p className="mt-3 text-[12px] text-fg-muted">{status}</p>
-              )}
-            </div>
+                <button onClick={close} disabled={busy} className={`mt-4 ${secondaryBtn}`}>
+                  {busy && status?.where === 'close' ? <Step text={status.text} /> : 'Close, get the stock back'}
+                </button>
+              </>
+            )}
+            {/* Outside the branch on purpose: closing empties this card, and a
+                confirmation that unmounts with it confirms nothing. */}
+            {!busy && status?.where === 'close' && <Status text={status.text} hash={status.hash} />}
           </div>
         </div>
-      </section>
+
+        <TestnetNote />
+      </Panel>
     </>
   );
 }
-
-function MarketCards({
-  markets, sel, onSelect, connected,
-}: { markets: Market[]; sel: number; onSelect: (i: number) => void; connected: boolean }) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {markets.map((m, i) => (
-        <button
-          key={m.stock.key}
-          onClick={() => onSelect(i)}
-          className={
-            i === sel
-              ? 'rounded-2xl bg-[#254839] p-4 text-left text-[#fdf8ed]'
-              : 'rounded-2xl bg-[#fdfaf1] p-4 text-left text-fg transition-colors hover:bg-white'
-          }
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-2">
-              <TokenIcon symbol={m.stock.base} size={22} />
-              <span className="text-[15px] font-medium">{m.stock.base}</span>
-            </span>
-            <span className="text-[11px] opacity-70">{m.stock.name}</span>
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-[22px] font-semibold tabular-nums">{price(m.price)}</span>
-            {/* Chainlink streams every session (regular, extended,
-                overnight), so its age is the honest thing to show. */}
-            <span className="text-[11px] opacity-70">{ago(m.observedAt)}</span>
-          </div>
-          <div className="mt-1 text-[11px] opacity-70">
-            Max LTV {pct(m.maxLtv)}{m.marketOpen ? '' : ' · last known price'}
-            {connected && m.balance > 0n ? ` · ${qty(m.balance, 2)} held` : ''}
-          </div>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div>
-      <div className="text-[12px] uppercase tracking-wider text-fg-muted">{label}</div>
-      <div className="text-[26px] text-fg font-semibold tabular-nums">{value}</div>
-      {sub && <div className="text-[12px] text-fg-muted">{sub}</div>}
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <dt className="text-fg-muted">{label}</dt>
-      <dd className="text-fg tabular-nums">{value}</dd>
-    </div>
-  );
-}
-
