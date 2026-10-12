@@ -37,6 +37,11 @@ KEY = os.environ.get("KEEPER_KEY", "")
 DEPLOYMENT = os.environ.get("DEPLOYMENT", os.path.join(ROOT, "deployments", "10143.json"))
 DS_HOST = os.environ.get("DS_HOST", "https://api.testnet-dataengine.chain.link")
 INTERVAL = int(os.environ.get("INTERVAL", "60"))
+# A verified push costs about 0.03 MON on Monad testnet: send one when a price
+# moved, the session changed, or the stored one is getting old, not every tick.
+MOVE_BPS = int(os.environ.get("MOVE_BPS", "30"))
+MAX_AGE = int(os.environ.get("MAX_AGE", "2700"))  # the oracle allows an hour
+RUN_MINUTES = float(os.environ.get("RUN_MINUTES", "0"))  # 0 = forever
 
 # Monad charges the gas limit, not the gas used: keep each one close to need.
 GAS_PRICE_PUSH = 1_500_000     # up to twelve reports, each verified by Chainlink
@@ -165,9 +170,14 @@ def tick_prices(dep):
         if r[0] not in best or r[1] > best[r[0]][1]:
             best[r[0]] = r
     reports, summary = [], []
+    now = time.time()
     for ticker, observed, status, mid, full in best.values():
-        stored_at = stored_observation(oracle, ticker)
+        price, stored_at, was_open = stored(oracle, ticker)
         if observed <= stored_at:
+            continue
+        moved = price == 0 or abs(mid * 1e18 - price) * 10_000 >= MOVE_BPS * price
+        session_changed = was_open != (status in (1, 2, 3, 4))
+        if not (moved or session_changed or now - stored_at >= MAX_AGE):
             continue
         reports.append(full)
         summary.append(f"{ticker} {mid:.2f} ({['?', 'pre', 'regular', 'post', 'overnight', 'closed'][status]})")
@@ -178,10 +188,11 @@ def tick_prices(dep):
     log("prices verified on chain:", ", ".join(summary))
 
 
-def stored_observation(oracle, ticker):
-    out = call(oracle, "feed(bytes32)((uint256,uint64,bool,bool))", b32(ticker))
-    parts = out.strip("()").replace(" ", "").split(",")
-    return int(parts[1].split("[")[0])
+def stored(oracle, ticker):
+    """(price 1e18, observedAt, marketOpen) as the oracle holds them."""
+    out = call(oracle, "feed(bytes32)((uint128,uint64,bool,bool))", b32(ticker))
+    parts = [x.strip().split(" ")[0] for x in out.strip("()").split(",")]
+    return int(parts[0]), int(parts[1]), parts[2] == "true"
 
 
 def b32(ticker):
@@ -327,6 +338,9 @@ def accounts_from(factory, job):
     return [(i, call(factory, "accounts(uint256)(address)", str(i))) for i in order]
 
 
+STARTED = time.time()
+
+
 def main():
     dep = json.load(open(DEPLOYMENT))
     log("keeper on chain", dep["chainId"], "prices: Chainlink Data Streams, verified on chain")
@@ -367,6 +381,9 @@ def main():
             except Exception as e:  # keep ticking
                 log(f"{name} failed: {e}")
         if once:
+            return
+        if RUN_MINUTES and time.time() - STARTED > RUN_MINUTES * 60:
+            log("run time reached, handing over to the next job")
             return
         # Measured from the start of the tick, so a slow one shortens the wait
         # instead of pushing the next price out by its own length.

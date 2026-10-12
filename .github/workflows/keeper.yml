@@ -1,0 +1,38 @@
+# The always-on keeper for the testnet demo. Each job runs scripts/keeper.py for
+# 5h40: every minute it reads the latest signed Chainlink Data Streams reports
+# and sends the ones that moved 0.3%, changed session or reached 45 minutes to
+# the oracle, which has Chainlink's VerifierProxy check them; then the
+# permissionless agents on every position. Its first step queues the next job,
+# which waits in the concurrency group and starts when this one ends; the
+# hourly cron only restarts a broken chain. Secrets: KEEPER_KEY (a funded key,
+# no role in the protocol) and DATASTREAMS_API_KEY / DATASTREAMS_API_SECRET.
+name: keeper
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+concurrency:
+  group: keeper
+  cancel-in-progress: false
+permissions:
+  actions: write
+  contents: read
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: queue the next run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run keeper.yml --repo ${{ github.repository }} --ref ${{ github.ref_name }}
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: python3 scripts/keeper.py
+        env:
+          KEEPER_KEY: ${{ secrets.KEEPER_KEY }}
+          DATASTREAMS_API_KEY: ${{ secrets.DATASTREAMS_API_KEY }}
+          DATASTREAMS_API_SECRET: ${{ secrets.DATASTREAMS_API_SECRET }}
+          RUN_MINUTES: "340"
