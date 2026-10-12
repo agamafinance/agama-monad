@@ -158,9 +158,10 @@ export default function MonadEarnPage() {
         }
       >
         <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
-          Deposit a tokenized stock. Agama borrows USDC against it at the level you pick, puts it to work in the
-          private-credit vault, and permissionless agents hold that level and turn the yield back into more of your
-          stock. Live on Monad Testnet, with stand-in tokens priced off the real xStocks.
+          Deposit a tokenized stock. Agama pledges it as collateral in the Arrow lending pool, borrows USDC from the
+          pool at the level you pick, and puts that USDC to work in the Agama private-credit vault. Permissionless
+          agents hold the level and turn the vault yield back into more of your stock. Live on Monad Testnet, with
+          stand-in tokens priced off the real xStocks.
         </p>
         <div className="mt-7 flex flex-wrap gap-8">
           <Stat
@@ -294,8 +295,9 @@ export default function MonadEarnPage() {
             <h2 className="text-[17px] font-semibold text-fg">Your position</h2>
             {!has ? (
               <p className="mt-4 text-[14px] text-fg-muted">
-                Nothing here yet. Deposit a stock and the protocol does the rest: it borrows against it, puts the USDC
-                to work, and keeps the position where you set it.
+                Nothing here yet. Deposit a stock and the protocol does the rest: it pledges it in the Arrow lending
+                pool, borrows USDC against it, puts the USDC in the private-credit vault, and keeps the position where
+                you set it.
               </p>
             ) : (
               <>

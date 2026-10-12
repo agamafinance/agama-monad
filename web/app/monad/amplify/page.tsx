@@ -147,10 +147,10 @@ export default function MonadAmplifyPage() {
     <>
       <Hero art={asset('/logos/coin-pair-amplify.svg')} title={<>Amplify your stock</>}>
         <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
-          One slider. Agama borrows USDC against your stock, buys more of the same stock on Kuru&apos;s on-chain order
-          book and pledges it, in one transaction. How far it goes is the market&apos;s own LTV ceiling. The agents
-          then hold the level as the price moves: a rise is borrowed into the vault as a buffer, a fall is repaid
-          out of it.
+          One slider. Agama pledges your stock as collateral in the Arrow lending pool, borrows USDC from it, buys
+          more of the same stock on Kuru&apos;s on-chain order book and pledges that too, in one transaction. How far
+          it goes is the market&apos;s own LTV ceiling. The agents then hold the level as the price moves: a rise is
+          borrowed into the Agama private-credit vault as a buffer, a fall is repaid out of it.
         </p>
         <div className="mt-7 flex flex-wrap gap-8">
           <Stat label="Borrow APR" value={rayPct(proto?.borrowRate)} sub="USDC, variable" />

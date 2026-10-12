@@ -100,9 +100,11 @@ export default function MonadLendPage() {
             against tokenized stocks
           </h1>
           <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
-            Supply USDC to the Arrow lending pool. Every borrower is overcollateralized by a tokenized
-            equity or by Agama vault shares, priced by our own on-chain oracle, and liquidations are
-            absorbed by a stability pool rather than by a thin DEX.
+            Supply USDC to the Arrow lending pool, the market Agama borrows from. Every borrower is
+            overcollateralized by a tokenized stock or by Agama vault shares pledged in the pool, priced by
+            Chainlink Data Streams, and liquidations are absorbed by a stability pool rather than by a thin
+            DEX. The USDC Earn borrows here goes into the Agama private-credit vault, and the agents turn
+            its yield into more stock.
           </p>
 
           <div className="mt-7 flex flex-wrap gap-8">
