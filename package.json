@@ -1,0 +1,8 @@
+{
+  "name": "agama-xlayer-keeper",
+  "private": true,
+  "description": "Only dependency of the keeper: builds RedStone signed payloads (scripts/redstone_payload.js).",
+  "dependencies": {
+    "@redstone-finance/sdk": "0.7.5"
+  }
+}

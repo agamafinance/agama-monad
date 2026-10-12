@@ -1,0 +1,13 @@
+{
+  "//": "The forked app carries type errors of its own (dapp-kit and @mysten ship mismatched types across packages) and its build ignores them. The Monad work does not get that pass: this config typechecks only what we added, and CI runs it.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": [
+    "next-env.d.ts",
+    "lib/monad/**/*.ts",
+    "lib/monad/**/*.tsx",
+    "app/monad/**/*.tsx",
+    "app/api/zap/**/*.ts",
+    "components/MonadConnectPill.tsx"
+  ]
+}

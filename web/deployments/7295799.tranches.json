@@ -1,0 +1,81 @@
+{
+  "_chainId": "7295799",
+  "jCONDO": {
+    "adapter": "0xACef606Eae71b7946f24ce61E4CE1b6Ed2C17126",
+    "aprRay": "240000000000000000000000000",
+    "bonus": 800,
+    "lt": 6500,
+    "maxLtv": 5000,
+    "name": "Sector Condo Junior",
+    "oracle": "0x492ABaC455d4c93cf502aDAABeEC7eA696ea47F1",
+    "pool": "Sector Condo",
+    "symbol": "jCONDO",
+    "token": "0x94067D5aE45C50b60dcbDB6145900D68E880DFfF",
+    "tranche": "Junior"
+  },
+  "jDIGCAP": {
+    "adapter": "0x0334F025B2D82A3d5E00009CD2Bb2f0158164797",
+    "aprRay": "240000000000000000000000000",
+    "bonus": 800,
+    "lt": 6500,
+    "maxLtv": 5000,
+    "name": "Digcap Junior",
+    "oracle": "0xC37744397F0fEf5a907224Fa524b8a0826388737",
+    "pool": "Digcap",
+    "symbol": "jDIGCAP",
+    "token": "0x6bF68516f21FC26Dc5dA95D1DCC95FfEfA94C980",
+    "tranche": "Junior"
+  },
+  "jRESOLV": {
+    "adapter": "0x58a515D553Ca6C841e84eEfeae845723f345c66f",
+    "aprRay": "240000000000000000000000000",
+    "bonus": 800,
+    "lt": 6500,
+    "maxLtv": 5000,
+    "name": "Resolvi Junior",
+    "oracle": "0xf1fa2229d4AB3C31f7B0781f84383f22aDE24a61",
+    "pool": "Resolvi",
+    "symbol": "jRESOLV",
+    "token": "0x821e0915AF3504382D591BA6a45a930d1e8897f6",
+    "tranche": "Junior"
+  },
+  "sCONDO": {
+    "adapter": "0x99b8271cC04771E80e2950D942e9dE4f08F8fBA9",
+    "aprRay": "120000000000000000000000000",
+    "bonus": 300,
+    "lt": 8500,
+    "maxLtv": 7500,
+    "name": "Sector Condo Senior",
+    "oracle": "0x7796F8e61Cfe374ea5a6183D723C9f7AddAdbB6b",
+    "pool": "Sector Condo",
+    "symbol": "sCONDO",
+    "token": "0x2cac9B27469FF3a0966649d8bA90604F22d83FaA",
+    "tranche": "Senior"
+  },
+  "sDIGCAP": {
+    "adapter": "0x65a693F0D0C51f41C86bd40EC46CF652ea778937",
+    "aprRay": "120000000000000000000000000",
+    "bonus": 300,
+    "lt": 8500,
+    "maxLtv": 7500,
+    "name": "Digcap Senior",
+    "oracle": "0x446709CAFBeA671C4E0E9deeefc319966B3Cd79C",
+    "pool": "Digcap",
+    "symbol": "sDIGCAP",
+    "token": "0x10c4c65CBdA4DEE8a1dee8F31B005437FB193931",
+    "tranche": "Senior"
+  },
+  "sRESOLV": {
+    "adapter": "0xE0c7861736B78F431B938f3481ef6a838FC64552",
+    "aprRay": "120000000000000000000000000",
+    "bonus": 300,
+    "lt": 8500,
+    "maxLtv": 7500,
+    "name": "Resolvi Senior",
+    "oracle": "0xf4360870d36f8bA4abC152421EfEAfb147c4b015",
+    "pool": "Resolvi",
+    "symbol": "sRESOLV",
+    "token": "0x18524b97ba62fa0Acb28f36A08766dF52B25EAd6",
+    "tranche": "Senior"
+  }
+}

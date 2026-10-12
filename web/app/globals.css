@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  color: #254839;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: #254839;
+}
+
+body {
+  font-feature-settings: 'ss01', 'cv11';
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(37, 72, 57, 0.20);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Hide scrollbar but keep scrolling */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============== Frame ==============
+   The gradient layer fills the viewport. The navbar lives directly on
+   this gradient (top portion). Below the navbar, a beige rounded panel
+   sits inside with a small side/bottom margin so the gradient stays
+   visible as a stroke around 3 sides.                                  */
+
+.frame-gradient {
+  background:
+    radial-gradient(140% 100% at 70% 0%,
+      rgba(80, 130, 95, 0.45) 0%,
+      rgba(50, 100, 70, 0.30) 22%,
+      rgba(35, 75, 55, 0.18) 45%,
+      rgba(25, 55, 40, 0.08) 70%,
+      rgba(15, 35, 25, 0.0) 90%
+    ),
+    linear-gradient(135deg,
+      #1F3D31 0%,
+      #254839 18%,
+      #2E5944 38%,
+      #2B5340 58%,
+      #1F3D31 80%,
+      #14271F 100%
+    );
+}
+
+.frame-panel {
+  background: #fdf8ed;
+}
+
+.frame-outer-rounded {
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.frame-panel-rounded {
+  border-radius: 20px;
+}
+
+/* ============== Hero + Vault panel ==============
+   Same gradient on both sections: starts at our ivory beige #fdf8ed at the
+   top and fades to pure white #ffffff at the bottom. The vault-panel
+   restarts at ivory at its rounded-corner top — that "fresh ivory" reads
+   as the soft step between Hero and the vault list. */
+.hero-glow {
+  background: linear-gradient(180deg, #fdf8ed 0%, #fdf8ed 80%, #ffffff 100%);
+}
+
+.vault-panel {
+  background: #fdf8ed;
+  border-top: 1px solid #fdf8ed;
+}
+
+/* ============== Pills / chips (navbar — on green outer) ============== */
+.pill-bar {
+  background: rgba(20, 39, 31, 0.55);
+}
+
+.pill-active {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.pill-outline {
+  background: rgba(20, 39, 31, 0.55);
+  transition: background 0.15s ease;
+}
+
+.pill-outline:hover {
+  background: rgba(20, 39, 31, 0.78);
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #2E5944 0%, #1F3D31 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 8px 30px rgba(20, 50, 35, 0.28);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.10);
+}
+
+.stat-chip {
+  background: rgba(37, 72, 57, 0.06);
+}
+
+/* Coin/3D image shadow */
+.coin-shadow {
+  filter: drop-shadow(0 24px 50px rgba(20, 50, 35, 0.30));
+}
