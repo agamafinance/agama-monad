@@ -20,6 +20,7 @@ export type Deployment = {
     testDexRouter?: Address;
     /// Chainlink Data Streams VerifierProxy the oracle verifies reports against.
     verifierProxy?: Address;
+    creReceiver?: Address;
     /// Kuru venue (buys and sells the xStock on its order book), when deployed.
     kuruVenue?: Address;
   };

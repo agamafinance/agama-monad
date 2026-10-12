@@ -24,7 +24,8 @@ export const deployments: Partial<Record<number, Deployment>> = {
       "stabilityPool": "0x0718a15d108F5b035485530Cf7AB518c6c99D3d9",
       "testDexRouter": "0x2206d75015C7fD9c67E7848b0a7Fc985AdbF0d24",
       "verifierProxy": "0x72790f9eB82db492a7DDb6d2af22A270Dcc3Db64",
-      "zapRouter": "0xE362eC8747F39362464c485768EbFf0A235F6748"
+      "zapRouter": "0xE362eC8747F39362464c485768EbFf0A235F6748",
+      "creReceiver": "0xec27460813bEB044DB01A1C1F28b91E69d8c95b8"
     },
     "deployedAtBlock": 70438570,
     "keeper": "0x65688E3942295D9975953E4842Ffa6dc822A9F9B",
@@ -35,10 +36,45 @@ export const deployments: Partial<Record<number, Deployment>> = {
       "wSPYx": "0x23549E94E90d93c74C9517701b3A82E146882c4a",
       "wTSLAx": "0xaD03BE2492A2F104d7B231aB1735E0865Ba5Ae15"
     }
+  },
+  "31349": {
+    "adapters": {
+      "AAPL": "0x1bEfE2d8417e22Da2E0432560ef9B2aB68Ab75Ad",
+      "NVDA": "0xf201fFeA8447AB3d43c98Da3349e0749813C9009",
+      "SPY": "0x26291175Fa0Ea3C8583fEdEB56805eA68289b105",
+      "TSLA": "0x1757a98c1333B9dc8D408b194B2279b5AFDF70Cc",
+      "VAULT": "0xde79380FBd39e08150adAA5C6c9dE3146f53029e"
+    },
+    "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "chainId": 31349,
+    "contracts": {
+      "agUSD": "0x12456Fa31e57F91B70629c1196337074c966492a",
+      "amplifyRouter": "0x9CC8B5379C40E24F374cd55973c138fff83ed214",
+      "earnRouter": "0x96E303b6D807c0824E83f954784e2d6f3614f167",
+      "factory": "0x746a48E39dC57Ff14B872B8979E20efE5E5100B1",
+      "oracle": "0x85495222Fd7069B987Ca38C2142732EbBFb7175D",
+      "pool": "0xa85EffB2658CFd81e0B1AaD4f2364CdBCd89F3a1",
+      "queue": "0xD5bFeBDce5c91413E41cc7B24C8402c59A344f7c",
+      "sagUSD": "0xce830DA8667097BB491A70da268b76a081211814",
+      "stabilityPool": "0x38F6F2caE52217101D7CA2a5eC040014b4164E6C",
+      "testDexRouter": "0xDC57724Ea354ec925BaFfCA0cCf8A1248a8E5CF1",
+      "verifierProxy": "0x72790f9eB82db492a7DDb6d2af22A270Dcc3Db64",
+      "zapRouter": "0x930b218f3e63eE452c13561057a8d5E61367d5b7"
+    },
+    "deployedAtBlock": 70450340,
+    "keeper": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "tokens": {
+      "USDC": "0xC0BF43A4Ca27e0976195E6661b099742f10507e5",
+      "wAAPLx": "0x30426D33a78afdb8788597D5BFaBdADc3Be95698",
+      "wNVDAx": "0x9d136eEa063eDE5418A6BC7bEafF009bBb6CFa70",
+      "wSPYx": "0x49149a233de6E4cD6835971506F47EE5862289c1",
+      "wTSLAx": "0x9D3DA37d36BB0B825CD319ed129c2872b893f538"
+    }
   }
 };
 
 /// Which file each deployment came from ("<id>-fork.json" = local deploy).
 export const deploymentSources: Partial<Record<number, string>> = {
-  "10143": "10143.json"
+  "10143": "10143.json",
+  "31349": "31349.json"
 };
