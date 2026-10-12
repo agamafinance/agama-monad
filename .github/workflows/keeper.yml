@@ -1,6 +1,6 @@
 # The always-on keeper for the testnet demo. Each job runs scripts/keeper.py for
 # 5h40: every minute it reads the latest signed Chainlink Data Streams reports
-# and sends the ones that moved 0.3%, changed session or reached 45 minutes to
+# and sends the ones that moved 0.5%, changed session or reached 50 minutes to
 # the oracle, which has Chainlink's VerifierProxy check them; then the
 # Kuru books re-quoted around the oracle, then the permissionless agents on
 # every position. Its first step queues the next job,
@@ -45,9 +45,9 @@ jobs:
           DATASTREAMS_API_KEY: ${{ secrets.DATASTREAMS_API_KEY }}
           DATASTREAMS_API_SECRET: ${{ secrets.DATASTREAMS_API_SECRET }}
           RUN_MINUTES: "340"
-          # Re-quote the books when the mid moved 0.5% (or orders were taken):
-          # each re-quote is a transaction billed on its gas limit.
-          REQUOTE_BPS: "50"
+          # Re-quote the books when the mid moved 1% (or orders were taken):
+          # a re-quote is about 2M gas on Kuru, billed on its limit.
+          REQUOTE_BPS: "100"
       - if: always()
         uses: actions/cache/save@v4
         with:
