@@ -1,0 +1,51 @@
+{
+  "schedule": "0 * * * * *",
+  "chainSelectorName": "monad-testnet",
+  "dataStreamsUrl": "https://api.testnet-dataengine.chain.link",
+  "receiver": "0xec27460813bEB044DB01A1C1F28b91E69d8c95b8",
+  "oracle": "0xCd4186dF8b4A93A693Db4f9E6A80Ce7478131BC8",
+  "factory": "0x232f3aA85fCe4B11D0577E8527D880b952102Cd5",
+  "pool": "0x5d40EbE874DDA0cc78CC134e5378e013B65d2D7b",
+  "multicall": "0xcA11bde05977b3631167028862bE2a173976CA11",
+  "maxReportAge": 300,
+  "maxAccounts": 25,
+  "maxRebalances": 3,
+  "markets": [
+    {
+      "ticker": "TSLA",
+      "adapter": "0x73bB2a8AE77eCfE9f17Bec028f1FC469aC3010DF",
+      "streams": {
+        "regular": "0x000b08f5e1a8c355e9982cea5707cf7b60be8ef91c42bb8022fd63f1bd71f6ab",
+        "extended": "0x000b4642144cb2e2f0e38ba57cc15a6549fd1522da1e7560f3d9e198b23fbe50",
+        "overnight": "0x000b2729962eb0c3e39d0778279004b52cdce9bc511a79c31c7f14516b2e3652"
+      }
+    },
+    {
+      "ticker": "NVDA",
+      "adapter": "0x15eD53A7c31782eb2A2505A5beb71596362e49Ea",
+      "streams": {
+        "regular": "0x000b1d444945231e44dd47736c6abe288b10cb1b53941c7c68012fbdd2b1755c",
+        "extended": "0x000bf689e4aa5c006c89c207eb155ae99184e433a518753eb745cc552391a743",
+        "overnight": "0x000b99b86a91cc317e2db8370f1466844dd9460cb51c3bf12fcc8d19d53d97bb"
+      }
+    },
+    {
+      "ticker": "SPY",
+      "adapter": "0x7a1a1a9D936456bF8c8dcF959EBAC5690CE7B310",
+      "streams": {
+        "regular": "0x000b220be6fe94b85d6d8e8d5d4d212f5b86a644cbcc1dbf28b9e77b6810a5ec",
+        "extended": "0x000b5197360a398d3fa52c25c43f2be1f782bba7f576373548b8414117e3a039",
+        "overnight": "0x000b0daa3a35d1c7ebf68a29981b74e04051ba6515c5b60204b213e533009dc4"
+      }
+    },
+    {
+      "ticker": "AAPL",
+      "adapter": "0x79F332F9afE1C7370a82640174c730472bC44529",
+      "streams": {
+        "regular": "0x000b61d6dec069be40efc5f21f0345142a827f42966a07fa4743773383a8dd7b",
+        "extended": "0x000bbff670f86a195158a347cb04693bdc7d475ab43c645448c8835268b1d099",
+        "overnight": "0x000bc10943a8c16f49ccec18764dfbed0c8d367503caf3a6e8af2087e79e81b7"
+      }
+    }
+  ]
+}

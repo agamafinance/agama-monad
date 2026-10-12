@@ -1,0 +1,13 @@
+# CRE project settings. `staging-settings` is what `cre workflow simulate` uses
+# here: with --broadcast it writes to Monad testnet through Chainlink's
+# MockKeystoneForwarder. `production-settings` is the DON, through the
+# KeystoneForwarder on Monad testnet.
+staging-settings:
+  rpcs:
+    - chain-name: monad-testnet
+      url: https://testnet-rpc.monad.xyz
+
+production-settings:
+  rpcs:
+    - chain-name: monad-testnet
+      url: https://testnet-rpc.monad.xyz
