@@ -5,17 +5,16 @@ import { useEffect, useState } from 'react';
 import { formatUnits, type Address } from 'viem';
 
 import { TokenIcon } from '@/components/icons/TokenIcon';
-import { ADAPTERS, ADDR, DEPLOYED, EXPLORER, RAY, STOCK_DECIMALS, STOCKS, TOKENS, USDC_DECIMALS } from '@/lib/monad/config';
+import { ADAPTERS, ADDR, DEPLOYED, EXPLORER, RAY, STOCKS, TOKENS, USDC_DECIMALS } from '@/lib/monad/config';
 import { accountAbi, amplifyRouterAbi, earnRouterAbi, lendingPoolAbi, stockOracleAbi } from '@/lib/monad/generated/abis';
 import {
   atLiveRate, baseTokens, erc20Abi, pub, useTick, useMonadProtocol,
   type AmplifyPosition, type RouterPosition,
 } from '@/lib/monad/useMonad';
 import { useMonadWallet } from '@/lib/monad/WalletProvider';
+import { qty, usd } from '@/components/monad/ui';
 
-const usd = (v: bigint) =>
-  `$${Number(formatUnits(v, USDC_DECIMALS)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const qty = (v: bigint, dp = 2) => Number(formatUnits(v, STOCK_DECIMALS)).toFixed(dp);
+const card = 'rounded-2xl bg-[#fdfaf1] shadow-[0_1px_3px_rgba(20,50,35,0.06),0_10px_30px_rgba(20,50,35,0.09)]';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
 
@@ -23,10 +22,12 @@ interface StockRow {
   key: string;
   symbol: string;
   name: string;
-  /// Held: in the wallet plus deposited as collateral. It is one holding.
-  amount: bigint;
-  value: bigint;
+  /// Deposited as collateral, in the base token.
   deposited: bigint;
+  depositedValue: bigint;
+  /// In the wallet, the xStock itself plus any wrapper shares, in the base token.
+  held: bigint;
+  heldValue: bigint;
   debt: bigint;
   hf: bigint;
 }
@@ -80,13 +81,12 @@ export default function MonadPortfolioPage() {
         // rather than the capped rate Arrow lends against.
         const acct = positions.find((p) => p.account !== ZERO)?.account;
         // Second and last round trip: the reads that needed an answer above.
-        const [inBase, buf, lent, a] = await Promise.all([
-          Promise.all(STOCKS.map((st, i) => {
-            const shares = positions[i].collateral + wrapped[i];
-            return shares === 0n ? Promise.resolve(0n) : pub.readContract({
-              address: TOKENS[st.wrapper], abi: erc20Abi, functionName: 'convertToAssets', args: [shares],
-            }).catch(() => shares) as Promise<bigint>;
-          })),
+        const toBase = (i: number, shares: bigint) => shares === 0n ? Promise.resolve(0n) : pub.readContract({
+          address: TOKENS[STOCKS[i].wrapper], abi: erc20Abi, functionName: 'convertToAssets', args: [shares],
+        }).catch(() => shares) as Promise<bigint>;
+        const [pledged, wrappedBase, buf, lent, a] = await Promise.all([
+          Promise.all(STOCKS.map((_, i) => toBase(i, positions[i].collateral))),
+          Promise.all(STOCKS.map((_, i) => toBase(i, wrapped[i]))),
           acct ? pub.readContract({
             address: acct, abi: accountAbi, functionName: 'redeemableUsdc',
           }).catch(() => 0n) as Promise<bigint> : Promise.resolve(0n),
@@ -95,19 +95,19 @@ export default function MonadPortfolioPage() {
           }) as Promise<bigint> : Promise.resolve(0n),
           atLiveRate(amp0),
         ]);
-        // One holding, wherever it sits: pledged as collateral, wrapped in the
-        // wallet, or as the xStock itself. Said and priced in the base
-        // token, the one the app names.
+        // What is pledged and what sits in the wallet, as two rows like the
+        // Solana front. Said and priced in the base token, the one the app names.
         const rows = STOCKS.map((st, i) => {
-          const amount = inBase[i] + held[i];
+          const inWallet = wrappedBase[i] + held[i];
           return {
             key: st.key, symbol: st.base, name: st.name,
-            amount, value: (amount * feeds[i].price) / 10n ** 30n,
-            deposited: positions[i].collateral, debt: positions[i].debt, hf: positions[i].healthFactorRay,
+            deposited: pledged[i], depositedValue: (pledged[i] * feeds[i].price) / 10n ** 30n,
+            held: inWallet, heldValue: (inWallet * feeds[i].price) / 10n ** 30n,
+            debt: positions[i].debt, hf: positions[i].healthFactorRay,
           };
         });
         if (alive) {
-          setStocks(rows.filter((r) => r.amount > 0n || r.debt > 0n));
+          setStocks(rows.filter((r) => r.deposited > 0n || r.held > 0n || r.debt > 0n));
           setAmp(a.exposure > 0n ? a : null);
           // A rounding of pool shares survives a full withdrawal; a row that
           // says 0.00 is noise, not a position.
@@ -130,7 +130,9 @@ export default function MonadPortfolioPage() {
   // stock at the oracle, plus the vault buffer behind it, less what is owed.
   const netWorth =
     wallet + supplied + buffer + (amp?.equity ?? 0n)
-    + stocks.reduce((t, r) => t + r.value - r.debt, 0n);
+    + stocks.reduce((t, r) => t + r.depositedValue + r.heldValue - r.debt, 0n);
+  const positions = stocks.filter((r) => r.deposited > 0n || r.debt > 0n);
+  const holdings = stocks.filter((r) => r.held > 0n);
 
   return (
     <section className="px-6 md:px-24 pt-10 md:pt-14 pb-24">
@@ -138,7 +140,7 @@ export default function MonadPortfolioPage() {
         <h1 className="mt-2 text-[34px] text-fg font-semibold">Portfolio</h1>
 
         {!address ? (
-          <div className="mt-8 rounded-2xl bg-[#fdfaf1] p-8 text-center shadow-[0_1px_3px_rgba(20,50,35,0.06),0_10px_30px_rgba(20,50,35,0.09)]">
+          <div className={`mt-8 p-8 text-center ${card}`}>
             <p className="text-[15px] text-fg-muted">Connect your wallet to view your positions.</p>
             <button
               type="button"
@@ -150,7 +152,7 @@ export default function MonadPortfolioPage() {
           </div>
         ) : (
           <>
-            <div className="mt-6 rounded-2xl bg-[#fdfaf1] p-6 shadow-[0_1px_3px_rgba(20,50,35,0.06),0_10px_30px_rgba(20,50,35,0.09)]">
+            <div className={`mt-6 p-6 ${card}`}>
               <div className="text-[12px] uppercase tracking-wider text-fg-muted">Net worth</div>
               <div className="text-[34px] font-semibold tabular-nums text-fg">
                 {ready ? usd(netWorth) : <span className="text-fg-muted/40">$0.00</span>}
@@ -166,23 +168,19 @@ export default function MonadPortfolioPage() {
             </div>
 
             <div className={`mt-4 space-y-3 transition-opacity duration-200 ${ready ? 'opacity-100' : 'opacity-0'}`}>
-              {stocks.map((r) => (
+              {positions.map((r) => (
                 <Row
-                  key={r.key}
+                  key={`pos-${r.key}`}
                   icon={r.symbol}
                   title={r.symbol}
-                  name={`${r.name} · ${
-                    r.debt > 0n
-                      ? `${usd(r.debt)} borrowed`
-                      : r.deposited > 0n ? 'deposited, nothing borrowed' : 'in your wallet'
-                  }`}
-                  amount={qty(r.amount)}
+                  name={`${r.name} · deposited · ${r.debt > 0n ? `${usd(r.debt)} borrowed` : 'nothing borrowed'}`}
+                  amount={qty(r.deposited, 2)}
                   sub={
                     r.debt > 0n
-                      ? `${usd(r.value)} · health ${(Number(r.hf) / Number(RAY)).toFixed(2)}`
-                      : usd(r.value)
+                      ? `${usd(r.depositedValue)} · health ${(Number(r.hf) / Number(RAY)).toFixed(2)}`
+                      : usd(r.depositedValue)
                   }
-                  href="/monad"
+                  href={`/monad?s=${r.key}`}
                 />
               ))}
 
@@ -208,20 +206,35 @@ export default function MonadPortfolioPage() {
                 />
               )}
 
+              {holdings.map((r) => (
+                <Row
+                  key={`held-${r.key}`}
+                  icon={r.symbol}
+                  title={r.symbol}
+                  name={`${r.name} · in your wallet`}
+                  amount={qty(r.held, 2)}
+                  amountTestId={`held-${r.key}`}
+                  sub={usd(r.heldValue)}
+                  href={`/monad?s=${r.key}`}
+                />
+              ))}
+
               <Row
                 icon="USDC"
                 title="USDC"
-                name="USD Coin, test"
-                amount={Number(formatUnits(wallet, USDC_DECIMALS)).toFixed(2)}
+                name="Stand-in USDC · in your wallet"
+                amount={usd(wallet).replace('$', '')}
+                amountTestId="held-USDC"
                 sub={usd(wallet)}
                 href="/monad/faucet"
               />
 
-              {stocks.length === 0 && !amp && supplied === 0n && wallet === 0n && (
+              {positions.length === 0 && !amp && supplied === 0n && (
                 <p className="rounded-2xl bg-[#fdfaf1] px-5 py-4 text-[14px] text-fg-muted shadow-[0_1px_3px_rgba(20,50,35,0.06)]">
-                  No position yet. Deposit a stock on{' '}
-                  <Link href="/monad" className="underline underline-offset-2">Earn</Link> and the agents take it
-                  from there, or lend USDC on{' '}
+                  No position yet. Get test tokens on the{' '}
+                  <Link href="/monad/faucet" className="underline underline-offset-2">Faucet</Link>, then deposit a
+                  stock on <Link href="/monad" className="underline underline-offset-2">Earn</Link> and the agents
+                  take it from there, or lend USDC on{' '}
                   <Link href="/monad/lend" className="underline underline-offset-2">Arrow</Link>.
                 </p>
               )}
@@ -234,20 +247,17 @@ export default function MonadPortfolioPage() {
 }
 
 function Row({
-  icon, title, name, amount, sub, href,
-}: { icon: string; title: string; name: string; amount: string; sub?: string; href: string }) {
+  icon, title, name, amount, amountTestId, sub, href,
+}: { icon: string; title: string; name: string; amount: string; amountTestId?: string; sub?: string; href: string }) {
   return (
-    <Link
-      href={href}
-      className="flex items-center gap-4 rounded-2xl bg-[#fdfaf1] px-5 py-4 shadow-[0_1px_3px_rgba(20,50,35,0.06)]"
-    >
+    <Link href={href} className="flex items-center gap-4 rounded-2xl bg-[#fdfaf1] px-5 py-4 shadow-[0_1px_3px_rgba(20,50,35,0.06)]">
       <TokenIcon symbol={icon} size={36} />
-      <div>
+      <div className="min-w-0">
         <div className="text-[15px] font-medium text-fg">{title}</div>
         <div className="text-[13px] text-fg-muted">{name}</div>
       </div>
-      <div className="ml-auto text-right">
-        <div className="text-[16px] font-semibold tabular-nums text-fg">{amount}</div>
+      <div className="ml-auto shrink-0 text-right">
+        <div className="text-[16px] font-semibold tabular-nums text-fg" data-testid={amountTestId}>{amount}</div>
         {sub && <div className="text-[12px] text-fg-muted">{sub}</div>}
       </div>
     </Link>
