@@ -87,9 +87,9 @@ if (existsSync(deploymentsDir)) {
     if (!m) continue;
     if (m[2] && !withForks) continue;
     const id = m[1];
-    // 31337 is a local anvil. It only exists on a developer's machine, so it
-    // never belongs in a committed or deployed bundle.
-    if (id === "31337" && !withForks) continue;
+    // Only Monad testnet ships: any other id is a local anvil that exists on
+    // one machine and never belongs in a committed or deployed bundle.
+    if (id !== "10143" && !withForks) continue;
     if (m[2] && sources[id] && !sources[id].endsWith("-fork.json")) continue;
     if (!m[2] || !all[id]) {
       all[id] = JSON.parse(readFileSync(join(deploymentsDir, f), "utf8"));
