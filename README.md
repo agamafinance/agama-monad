@@ -2,12 +2,12 @@
 
 **[Try the app](https://app.agama.finance/monad)** · Monad testnet (chain 10143) · Metropolis, track Onchain Finance & Trading
 
-xStocks just brought 1,100 tokenized US equities natively to Monad, and Aave is
-proposing a V4 hub that lends USDC against them. What a holder does with that
-loan is still left to them. Agama does it: deposit a tokenized stock, the
-protocol borrows USDC against it at a safe level, puts the USDC to work in a
-private credit vault, and permissionless agents keep the level and turn the
-yield back into **more of the same stock**. What grows is your share count.
+xStocks just brought 1,100 tokenized US equities natively to Monad, and a
+holder can only hold them. Agama turns them into a position that grows: deposit
+the stock into an Arrow lending market, the protocol borrows USDC against it at
+a safe level, puts the USDC to work in the Agama private credit vault, and
+permissionless agents keep the level and turn the yield back into **more of the
+same stock**. What grows is your share count, not a stablecoin balance.
 
 - **Earn.** One deposit, nothing to set. The stock rises, the agents borrow the
   difference; it falls, they repay from the yield already earned, never by
