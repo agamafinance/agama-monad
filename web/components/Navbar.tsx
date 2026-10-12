@@ -15,13 +15,12 @@ const NAV: Record<Platform, { href: string; label: string }[]> = {
   ],
 };
 
-// The official Monad mark, cropped out of their wordmark, served from this
-// deployment's own origin: app.agama.finance proxies this app and has every
-// other network's logo but not this one.
-const XLAYER_MARK = `${process.env.NEXT_PUBLIC_ASSET_PREFIX ?? ''}/monad.svg`;
+// The Monad mark, served from this deployment's own origin: app.agama.finance
+// proxies this app and has every other network's logo but not this one.
+const MONAD_MARK = `${process.env.NEXT_PUBLIC_ASSET_PREFIX ?? ''}/monad.svg`;
 
 const NETWORKS: { id: Platform; label: string; logo: string; home: string }[] = [
-  { id: 'monad', label: 'Monad', logo: XLAYER_MARK, home: '/monad' },
+  { id: 'monad', label: 'Monad', logo: MONAD_MARK, home: '/monad' },
 ];
 
 export function Navbar() {
@@ -65,7 +64,7 @@ export function Navbar() {
       <header className="relative z-50 bg-[#1F3D31] md:bg-transparent px-4 md:pl-6 md:pr-[24px] py-3 md:py-[11px]">
         <div className="flex items-center justify-between gap-3">
           <Link href={current.home} className="flex items-center group shrink-0">
-            <img src="/agama-logo-beige.svg" alt="Agama" className="h-[32.8px] w-auto" />
+            <img src={`${process.env.NEXT_PUBLIC_ASSET_PREFIX ?? ''}/agama-logo-beige.svg`} alt="Agama" className="h-[32.8px] w-auto" />
           </Link>
 
           {/* Desktop nav (inline) */}

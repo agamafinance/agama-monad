@@ -1,17 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Check, Copy, ExternalLink } from 'lucide-react';
 
 import { TokenIcon } from '@/components/icons/TokenIcon';
+import { NotDeployed } from '@/components/PriceBadge';
 import { formatUnits, parseUnits, type Address } from 'viem';
 
-import { asset, OKB_FAUCET, STOCKS, TOKENS, USDG_DECIMALS } from '@/lib/monad/config';
+import { asset, DEPLOYED, MON_FAUCET, STOCKS, TOKENS, USDC_DECIMALS } from '@/lib/monad/config';
 import { erc20Abi, errorText, faucetAll, pub, useTick, useMonadProtocol } from '@/lib/monad/useMonad';
 import { useMonadWallet } from '@/lib/monad/WalletProvider';
 
-const USDG_AMOUNT = parseUnits('5000', USDG_DECIMALS);
+const USDC_AMOUNT = parseUnits('10000', USDC_DECIMALS);
 const STOCK_AMOUNT = parseUnits('10', 18);
 
 export default function MonadFaucetPage() {
@@ -21,6 +22,14 @@ export default function MonadFaucetPage() {
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  const [mon, setMon] = useState<bigint>();
+
+  useEffect(() => {
+    if (!address) { setMon(undefined); return; }
+    let alive = true;
+    pub.getBalance({ address }).then((b) => { if (alive) setMon(b); }).catch(() => {});
+    return () => { alive = false; };
+  }, [address, tick]);
 
   const copyAddress = async () => {
     if (!address) return;
@@ -31,8 +40,8 @@ export default function MonadFaucetPage() {
 
   /// One transaction for the lot: Multicall3 makes every `faucet(you, amount)`
   /// call in a single batch, so the wallet asks to sign once instead of five
-  /// times. The stocks come in the base form, the one an OKX withdrawal
-  /// delivers and the only one the app ever asks for.
+  /// times. The stocks come in the base form, the xStock itself, the only one
+  /// the app ever asks for.
   async function mintEverything() {
     if (!address) return;
     setBusy(true);
@@ -42,10 +51,10 @@ export default function MonadFaucetPage() {
         address: TOKENS[s.wrapper], abi: erc20Abi, functionName: 'asset',
       }) as Promise<Address>));
       await faucetAll(address, [
-        { token: TOKENS.USDG, amount: USDG_AMOUNT },
+        { token: TOKENS.USDC, amount: USDC_AMOUNT },
         ...bases.map((token) => ({ token, amount: STOCK_AMOUNT })),
       ]);
-      setNote('5,000 USDG and 10 of each stock, in one transaction');
+      setNote('10,000 USDC and 10 of each stock, in one transaction');
       bumpTick();
     } catch (e: unknown) {
       setNote(errorText(e));
@@ -54,7 +63,7 @@ export default function MonadFaucetPage() {
     }
   }
 
-  const usdg = proto?.usdg;
+  const usdc = proto?.usdc;
 
   return (
     <>
@@ -70,20 +79,25 @@ export default function MonadFaucetPage() {
 
           <h1 className="mt-3 text-[34px] md:text-[44px] leading-[1.05] text-fg font-semibold">Get testnet funds</h1>
           <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
-            Grab OKB for gas, then take the stand-in USDG and xStocks in one transaction. Monad Testnet
-            carries neither, so these are ours: same decimals, same ERC-4626 wrapper shape, and the Arrow
-            and Agama contracts they meet are the real ones.
+            Grab MON for gas, then take the stand-in USDC and xStocks in one transaction. These are
+            ours: same decimals, same ERC-4626 wrapper shape, priced off the real stocks by Chainlink
+            Data Streams, and the Arrow and Agama contracts they meet are the real ones.
           </p>
 
           <div className="mt-7 flex flex-wrap gap-8">
-            <Stat label="Network" value="Monad Testnet" sub="Chain 1952" />
+            <Stat label="Network" value="Monad Testnet" sub="Chain 10143" />
+            <Stat
+              label="MON"
+              value={!address || mon === undefined ? '-' : Number(formatUnits(mon, 18)).toFixed(3)}
+              sub="For gas"
+            />
             <Stat label="Asset" value="xStocks" sub="TSLAx, NVDAx, SPYx, AAPLx" />
             <Stat
-              label="USDG"
-              value={!address || usdg === undefined
-                ? '—'
-                : Number(formatUnits(usdg, USDG_DECIMALS)).toFixed(2)}
-              sub={address ? 'Global Dollar, in your wallet' : 'Global Dollar'}
+              label="USDC"
+              value={!address || usdc === undefined
+                ? '-'
+                : Number(formatUnits(usdc, USDC_DECIMALS)).toFixed(2)}
+              sub={address ? 'Test USDC, in your wallet' : 'Test USDC'}
             />
           </div>
         </div>
@@ -91,32 +105,33 @@ export default function MonadFaucetPage() {
 
       <section className="vault-panel relative z-10 rounded-t-[20px] px-6 md:px-24 pt-10 md:pt-14 pb-24">
         <div className="max-w-[1400px] mx-auto space-y-3">
+          <NotDeployed />
           <h2 className="mb-2 text-[13px] uppercase tracking-wider text-fg-muted">Get funded</h2>
 
           <StepRow
             icon={<img src={asset('/monad.svg')} alt="" className="h-10 w-10 shrink-0 rounded-full" />}
-            title="OKB for gas"
-            blurb="Monad Testnet transactions are paid in OKB. Grab some from the OKX faucet, it is the one thing here nobody can mint for you."
+            title="MON for gas"
+            blurb="Every Monad transaction is paid in MON, including from a passkey account, which is a plain address like any other. It is the one thing here nobody can mint for you."
           >
-            <FaucetLink href={OKB_FAUCET} label="Open OKB faucet" />
+            <FaucetLink href={MON_FAUCET} label="Open MON faucet" />
           </StepRow>
 
           <StepRow
             icon={
               <div className="flex shrink-0 -space-x-2">
-                <TokenIcon symbol="USDG" size={40} />
+                <TokenIcon symbol="USDC" size={40} />
                 <TokenIcon symbol="TSLAx" size={40} />
                 <TokenIcon symbol="NVDAx" size={40} />
               </div>
             }
-            title="USDG and the four stocks"
-            blurb="5,000 USDG, and 10 each of TSLAx, NVDAx, SPYx and AAPLx in the form an OKX withdrawal delivers. One transaction, one signature."
+            title="USDC and the four stocks"
+            blurb="10,000 USDC, and 10 each of TSLAx, NVDAx, SPYx and AAPLx. One transaction, one signature."
           >
             <MintButton
               onClick={address ? mintEverything : () => connect()}
               busy={busy}
               label={address ? 'Get the test tokens' : 'Connect a wallet'}
-              disabled={busy}
+              disabled={busy || (!!address && !DEPLOYED)}
             />
           </StepRow>
 
@@ -126,7 +141,7 @@ export default function MonadFaucetPage() {
                 Connect a wallet
               </button>
             ) : (
-              'Paste your address into the OKB faucet above.'
+              'Paste your address into the MON faucet above.'
             )}
             <button
               type="button"
@@ -142,9 +157,9 @@ export default function MonadFaucetPage() {
 
           <Link
             href="/monad"
-                  className="group mt-6 flex items-center gap-4 rounded-2xl bg-[#254839] px-5 py-4"
+            className="group mt-6 flex items-center gap-4 rounded-2xl bg-[#254839] px-5 py-4"
           >
-            <img src="/agama-logo-circle.svg" alt="" className="h-10 w-10" />
+            <img src={asset('/agama-logo-circle.svg')} alt="" className="h-10 w-10" />
             <div>
               <div className="text-[15px] font-medium text-[#fdf8ed]">Funded? Deposit your stock</div>
               <div className="text-[13px] text-[#fdf8ed]/70">Borrow against it and let the agents grow it</div>

@@ -14,19 +14,25 @@ export type Deployment = {
     factory: Address;
     earnRouter: Address;
     amplifyRouter: Address;
-    /// Buy and Earn zap (OKX DEX aggregator on 196, stand-in router on testnet).
+    /// Buy and Earn zap; also holds the swap allowlist the accounts read.
     zapRouter?: Address;
-    /// Testnet only: stand-in DEX priced at the Agama oracle, allowlisted in the zap.
+    /// Stand-in venue priced at the Agama oracle, allowlisted in the zap.
     testDexRouter?: Address;
+    /// Chainlink Data Streams VerifierProxy the oracle verifies reports against.
+    verifierProxy?: Address;
+    /// Kuru venue (buys and sells the xStock on its order book), when deployed.
+    kuruVenue?: Address;
   };
   adapters: Record<StockKey | "VAULT", Address>;
   tokens: {
-    USDG: Address;
+    USDC: Address;
     wTSLAx: Address;
     wNVDAx: Address;
     wSPYx: Address;
     wAAPLx: Address;
   };
+  /// Kuru order book per stock (base xStock / USDC), when deployed.
+  kuru?: Partial<Record<StockKey, Address>>;
   admin: Address;
   keeper: Address;
   deployedAtBlock: number;

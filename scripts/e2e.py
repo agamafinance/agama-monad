@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
 """End-to-end run of Arrow x Agama with real transactions.
 
-    python3 scripts/e2e.py fork [a|b|all]      # local X Layer mainnet fork (anvil, chain 1961)
-    python3 scripts/e2e.py testnet [a|b|all]   # X Layer testnet (chain 1952), deployer in .keys/
+    python3 scripts/e2e.py fork [a|b|all]      # anvil fork of Monad testnet: the deployed contracts,
+                                               # Chainlink's real VerifierProxy, prices moved at will
+    python3 scripts/e2e.py testnet [a|b|all]   # Monad testnet itself (chain 10143), deployer in .keys/
 
 Scenario (every step asserted on-chain state):
-  1. keeper relays real Chainlink prices
+  1. keeper pushes signed Chainlink Data Streams reports, verified on chain
   2. Alice: Earn on 10 wTSLAx at 25% LTV (keeps her vault shares as buffer)
   3. Carol: Earn on 10 wTSLAx at 30% LTV, then pulls her vault shares out (no buffer)
-  4. Bob: Amplify 1,000 USDG at 3x
+  4. Bob: Amplify 1,000 USDC at 3x
   5. vault yield settled by the operator -> Bob's equity grows
   6. TSLA crash to ~71% in steps inside the oracle deviation cap
   7. keeper protection tick: Alice soft-deleveraged (stock untouched),
      Carol partially liquidated by the stability pool (keeps the rest)
   8. a buyer takes the SP inventory at the 3% discount
-  9. TSLA recovers, Bob closes Amplify to USDG, Alice closes Earn and gets her 10 wTSLAx back
+  9. TSLA recovers, Bob closes Amplify to USDC, Alice closes Earn and gets her 10 wTSLAx back
 
 Part B (the remaining paths):
-  10. Dave supplies 1,000 USDG to Arrow as a lender
-  11. Erin stakes 500 USDG in the stability pool; an exit before the cooldown is refused
+  10. Dave supplies 1,000 USDC to Arrow as a lender
+  11. Erin stakes 500 USDC in the stability pool; an exit before the cooldown is refused
   12. Equity session closed: TSLA frozen, terms tightened both sides (LTV 30->22, threshold
       40->32), borrowing still open at the tighter level, then the relay reopens the session
   13. Frank: Earn, soft deleverage, recovery, close with a wallet top-up (closeWithTopUp)
@@ -27,8 +28,8 @@ Part B (the remaining paths):
   15. Buy and Earn: one transaction buys the stock and opens the position
   16. Agents: the stock rises, `rebalance` borrows the difference and vaults it;
       `compoundIntoStock` turns the vault yield into more stock
-  17. OKX rail: a stock withdrawn from the OKX app (the base xStock) is deposited
-      directly, and the position closes back into that same token
+  17. The base xStock (the token a wallet holds) is deposited directly, and the
+      position closes back into that same token
   18. Dave withdraws his supply with the interest paid by the borrowers
 """
 
@@ -42,8 +43,8 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODE = sys.argv[1] if len(sys.argv) > 1 else "fork"
 PART = sys.argv[2] if len(sys.argv) > 2 else "all"
-RPC = {"fork": "http://127.0.0.1:8545", "testnet": "https://testrpc.xlayer.tech/terigon"}[MODE]
-DEP = json.load(open(os.path.join(ROOT, "deployments", {"fork": "1961", "testnet": "1952"}[MODE] + ".json")))
+RPC = {"fork": "http://127.0.0.1:8545", "testnet": "https://testnet-rpc.monad.xyz"}[MODE]
+DEP = json.load(open(os.path.join(ROOT, "deployments", "10143.json")))
 C, A, T = DEP["contracts"], DEP["adapters"], DEP["tokens"]
 RAY = 10**27
 E18 = 10**18
@@ -65,10 +66,11 @@ ACTORS = ("alice", "carol", "bob", "buyer", "dave", "erin", "frank", "grace")
 
 
 def keys():
-    if MODE == "fork":
-        return {"admin": ANVIL_KEYS[0], **{n: ANVIL_KEYS[i + 2] for i, n in enumerate(ACTORS)}}
     dep = json.load(open(os.path.join(ROOT, ".keys", "deployer.json")))
     dep = dep[0] if isinstance(dep, list) else dep
+    if MODE == "fork":
+        # The fork carries the live deployment, so the admin is its deployer.
+        return {"admin": dep["private_key"], **{n: ANVIL_KEYS[i + 2] for i, n in enumerate(ACTORS)}}
     path = os.path.join(ROOT, ".keys", "e2e.json")
     # Fresh actors by default: a shared testnet keeps positions between runs, and
     # the scenario assumes everyone starts flat. E2E_REUSE=1 keeps the old keys.
@@ -190,9 +192,9 @@ def park_keeper():
     if MODE != "testnet":
         return
 
-    plist = os.path.expanduser("~/Library/LaunchAgents/com.agama.xlayer.keeper.plist")
+    plist = os.path.expanduser("~/Library/LaunchAgents/com.agama.monad.keeper.plist")
     under_launchd = os.path.exists(plist) and subprocess.run(
-        ["launchctl", "list", "com.agama.xlayer.keeper"], capture_output=True).returncode == 0
+        ["launchctl", "list", "com.agama.monad.keeper"], capture_output=True).returncode == 0
     in_tmux = subprocess.run(["tmux", "has-session", "-t", "agama-keeper"],
                              capture_output=True).returncode == 0
     if not under_launchd and not in_tmux:
@@ -219,28 +221,23 @@ def park_keeper():
 def fund():
     park_keeper()
     step("0. funding actors")
-    if MODE == "fork":
-        for n in ACTORS:
+    for n in ACTORS:
+        if MODE == "fork":
             cast("rpc", "anvil_setBalance", ADDR[n], hex(10 * E18))
-        def setbal(token, slot, who, amount):
-            key = subprocess.check_output(["cast", "index", "address", who, str(slot)], text=True).strip()
-            cast("rpc", "anvil_setStorageAt", token, key, "0x" + format(amount, "064x"))
-        for n in ("alice", "carol", "frank", "grace"):
-            setbal(T["wTSLAx"], 101, ADDR[n], 10 * E18)
-        for n in ("bob", "buyer", "dave", "erin", "frank", "grace"):
-            setbal(T["USDG"], 1, ADDR[n], 5_000 * E6)
-        setbal(T["USDG"], 1, ADDR["admin"], 100_000 * E6)
-    else:
-        for n in ACTORS:
-            if num(cast("balance", ADDR[n])) < 2 * 10**15:
-                send("admin", ADDR[n], "", value=2 * 10**15)  # 0.002 OKB of gas
-        for n in ("alice", "carol", "frank", "grace"):
-            if num(call(T["wTSLAx"], "balanceOf(address)(uint256)", ADDR[n])) < 10 * E18:
-                send(n, T["wTSLAx"], "faucet(address,uint256)", ADDR[n], str(10 * E18))
-        for n in ("bob", "buyer", "admin", "dave", "erin", "frank", "grace"):
-            send(n, T["USDG"], "faucet(address,uint256)", ADDR[n], str(5_000 * E6))
+        elif num(cast("balance", ADDR[n])) < E18:
+            # Monad wants the whole gas limit covered up front: 6M at ~100 gwei.
+            send("admin", ADDR[n], "", value=E18)
+    if MODE == "fork":
+        cast("rpc", "anvil_setBalance", ADDR["admin"], hex(100 * E18))
+    # The stand-ins' own faucets, on the fork as on testnet: a wrapper share
+    # written straight into storage would have no stock behind it.
+    for n in ("alice", "carol", "frank", "grace"):
+        if num(call(T["wTSLAx"], "balanceOf(address)(uint256)", ADDR[n])) < 10 * E18:
+            send(n, T["wTSLAx"], "faucet(address,uint256)", ADDR[n], str(10 * E18))
+    for n in ("bob", "buyer", "admin", "dave", "erin", "frank", "grace"):
+        send(n, T["USDC"], "faucet(address,uint256)", ADDR[n], str(5_000 * E6))
     ok(num(call(T["wTSLAx"], "balanceOf(address)(uint256)", ADDR["alice"])) >= 10 * E18, "alice holds 10 wTSLAx")
-    ok(num(call(T["USDG"], "balanceOf(address)(uint256)", ADDR["bob"])) >= 1_000 * E6, "bob holds USDG")
+    ok(num(call(T["USDC"], "balanceOf(address)(uint256)", ADDR["bob"])) >= 1_000 * E6, "bob holds USDC")
 
 
 def keeper(jobs):
@@ -262,16 +259,17 @@ def feed(ticker):
 
 
 def push(ticker, price, is_open=True):
+    """An admin price, one second after the last observation: the scenario's
+    moves stay close to real time, so the next real Chainlink report is newer
+    than they are and the keeper can still bring the market back to it."""
     _, last_obs, _ = feed(ticker)
-    while True:
-        now = num(cast("block", "latest", "-f", "timestamp"))
-        if now > last_obs:
-            break
+    obs = last_obs + 1
+    while num(cast("block", "latest", "-f", "timestamp")) < obs:
         if MODE == "fork":
             cast("rpc", "evm_mine")  # anvil only advances time when a block is mined
         else:
             time.sleep(1)
-    send("admin", C["oracle"], "push(bytes32,uint256,uint64,bool)", b32(ticker), str(price), str(now),
+    send("admin", C["oracle"], "push(bytes32,uint256,uint64,bool)", b32(ticker), str(price), str(obs),
          "true" if is_open else "false")
 
 
@@ -293,8 +291,8 @@ def reverts(who, to, sig, *args):
         return True
 
 
-def usdg(who):
-    return num(call(T["USDG"], "balanceOf(address)(uint256)", ADDR[who]))
+def usdc(who):
+    return num(call(T["USDC"], "balanceOf(address)(uint256)", ADDR[who]))
 
 
 def wtsla(who):
@@ -341,7 +339,7 @@ def main():
 
 def part_a():
     step("1. keeper relays Chainlink prices")
-    keeper("redstone,prices")
+    keeper("prices")
     p0, _, is_open = feed("TSLA")
     ok(p0 > 0 and is_open, f"TSLA {p0 / E18:.2f} USD, market open")
 
@@ -352,19 +350,19 @@ def part_a():
     # Relative: on a shared testnet the actor may carry a position (and its
     # accrued interest) from an earlier run.
     ok(abs(a["debt"] - a["value"] // 4) <= max(2, a["value"] // 4000),
-       f"borrowed {a['debt'] / E6:.2f} USDG = 25% of {a['value'] / E6:.2f}")
+       f"borrowed {a['debt'] / E6:.2f} USDC = 25% of {a['value'] / E6:.2f}")
     ok(abs(a["hf"] - 16 * RAY // 10) < RAY // 1000, f"HF {a['hf'] / RAY:.3f}")
-    # "The borrowed USDG went into the vault" is a question about the shares the
-    # account holds, so ask the vault: `redeemableUsdg` converts them at the
+    # "The borrowed USDC went into the vault" is a question about the shares the
+    # account holds, so ask the vault: `redeemableUsdc` converts them at the
     # ERC-4626 rate. `freeSharesValue` answers a different question, what those
     # shares are worth AS COLLATERAL, and the CAPO ceiling deliberately holds
     # that under the live rate while a settled yield is amortised. Comparing it
     # to the debt was comparing a haircut to the thing it discounts.
-    redeemable = num(call(a["account"], "redeemableUsdg()(uint256)"))
+    redeemable = num(call(a["account"], "redeemableUsdc()(uint256)"))
     ok(a["debt"] * 999 // 1000 <= redeemable <= a["debt"] + 2,
-       f"{redeemable / E6:.2f} USDG parked in the Agama vault (debt {a['debt'] / E6:.2f})")
+       f"{redeemable / E6:.2f} USDC parked in the Agama vault (debt {a['debt'] / E6:.2f})")
     ok(a["freeValue"] <= redeemable,
-       f"counted as collateral at the capped rate: {a['freeValue'] / E6:.2f} USDG, "
+       f"counted as collateral at the capped rate: {a['freeValue'] / E6:.2f} USDC, "
        f"{(redeemable - a['freeValue']) / E6:.2f} still held back by the CAPO ceiling")
 
     step("3. Carol: Earn at 30% LTV, then withdraws her vault shares (no buffer)")
@@ -372,10 +370,10 @@ def part_a():
     send("carol", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), "3000")
     c = earn_pos("carol")
     send("carol", c["account"], "sweep(address)", C["sagUSD"])
-    ok(earn_pos("carol")["free"] == 0, f"Carol debt {c['debt'] / E6:.2f} USDG, buffer removed")
+    ok(earn_pos("carol")["free"] == 0, f"Carol debt {c['debt'] / E6:.2f} USDC, buffer removed")
 
-    step("4. Bob: Amplify 1,000 USDG at 3x")
-    send("bob", T["USDG"], "approve(address,uint256)", C["amplifyRouter"], str(1_000 * E6))
+    step("4. Bob: Amplify 1,000 USDC at 3x")
+    send("bob", T["USDC"], "approve(address,uint256)", C["amplifyRouter"], str(1_000 * E6))
     send("bob", C["amplifyRouter"], "open(uint256,uint256)", str(1_000 * E6), "30000")
     b = amp_pos("bob")
     # 3x is a target on the valuation Arrow lends against, and that valuation is
@@ -400,14 +398,14 @@ def part_a():
     room = ceiling - b["debt"] if ceiling > b["debt"] else 0
     reached = b["debt"] >= target * 99 // 100
     ok(b["debt"] <= target * 1005 // 1000 and (reached or room < min_borrow),
-       f"borrowed {b['debt'] / E6:.2f} USDG on 1,000 deposited, "
+       f"borrowed {b['debt'] / E6:.2f} USDC on 1,000 deposited, "
        + ("the 2x target at the capped rate"
           if reached else
-          f"all the {max_ltv // 100}% ceiling allowed: {room / E6:.2f} USDG of room left, "
+          f"all the {max_ltv // 100}% ceiling allowed: {room / E6:.2f} USDC of room left, "
           f"under the {min_borrow / E6:.2f} minimum borrow"))
     fair = (1_000 * E6 + b["debt"]) * capped // live
     ok(abs(b["exposure"] - fair) <= fair // 500,
-       f"exposure {b['exposure'] / E6:.2f} USDG, everything in the vault at that same rate, "
+       f"exposure {b['exposure'] / E6:.2f} USDC, everything in the vault at that same rate, "
        f"so the position reads {b['lev'] / 10_000:.2f}x at HF {b['hf'] / RAY:.3f}")
 
     step("5. vault yield settled (0.5% of vault assets)")
@@ -415,10 +413,10 @@ def part_a():
     y = vault_assets // 200
     shares_b = num(call(A["VAULT"], "balanceOf(address)(uint256)", b["account"]))
     live_before = num(call(C["sagUSD"], "convertToAssets(uint256)(uint256)", str(shares_b))) // 10**12
-    send("admin", T["USDG"], "transfer(address,uint256)", C["queue"], str(y))
+    send("admin", T["USDC"], "transfer(address,uint256)", C["queue"], str(y))
     send("admin", C["queue"], "settleYield(uint256)", str(y))
     live_after = num(call(C["sagUSD"], "convertToAssets(uint256)(uint256)", str(shares_b))) // 10**12
-    ok(live_after > live_before, f"Bob's exposure {live_before / E6:.2f} -> {live_after / E6:.2f} USDG (+{(live_after - live_before) / E6:.2f}, 3x the yield of his equity)")
+    ok(live_after > live_before, f"Bob's exposure {live_before / E6:.2f} -> {live_after / E6:.2f} USDC (+{(live_after - live_before) / E6:.2f}, 3x the yield of his equity)")
 
     step("6. TSLA crash to ~71.5% (steps inside the 15% deviation cap)")
     walk("TSLA", p0 * 715 // 1000)
@@ -440,36 +438,36 @@ def part_a():
     inv = num(call(T["wTSLAx"], "balanceOf(address)(uint256)", C["stabilityPool"]))
     fair = num(call(A["TSLA"], "valueOf(uint256)(uint256)", str(inv)))
     max_cost = fair * 9_700 // 10_000 + 2
-    send("buyer", T["USDG"], "approve(address,uint256)", C["stabilityPool"], str(max_cost))
+    send("buyer", T["USDC"], "approve(address,uint256)", C["stabilityPool"], str(max_cost))
     send("buyer", C["stabilityPool"], "buyCollateral(address,uint256,uint256,address)", A["TSLA"], str(inv), str(max_cost), ADDR["buyer"])
     ok(num(call(T["wTSLAx"], "balanceOf(address)(uint256)", ADDR["buyer"])) >= inv,
-       f"buyer paid ~{max_cost / E6:.2f} USDG for {inv / E18:.3f} wTSLAx worth {fair / E6:.2f}")
+       f"buyer paid ~{max_cost / E6:.2f} USDC for {inv / E18:.3f} wTSLAx worth {fair / E6:.2f}")
 
     step("9. recovery and exits")
     walk("TSLA", p0)
-    usdg_before = num(call(T["USDG"], "balanceOf(address)(uint256)", ADDR["bob"]))
+    usdc_before = num(call(T["USDC"], "balanceOf(address)(uint256)", ADDR["bob"]))
     send("bob", C["amplifyRouter"], "close(bool)", "true")
-    got = num(call(T["USDG"], "balanceOf(address)(uint256)", ADDR["bob"])) - usdg_before
-    ok(got > 1_000 * E6, f"Bob closed Amplify: {got / E6:.2f} USDG back for 1,000 in")
+    got = num(call(T["USDC"], "balanceOf(address)(uint256)", ADDR["bob"])) - usdc_before
+    ok(got > 1_000 * E6, f"Bob closed Amplify: {got / E6:.2f} USDC back for 1,000 in")
     send("alice", C["earnRouter"], "close(address)", A["TSLA"])
     ok(num(call(T["wTSLAx"], "balanceOf(address)(uint256)", ADDR["alice"])) >= 10 * E18, "Alice closed Earn: 10 wTSLAx back")
 
 
 def part_b():
-    keeper("redstone,prices")
+    keeper("prices")
     p0, _, _ = feed("TSLA")
 
-    step("10. Dave supplies 1,000 USDG to Arrow")
-    send("dave", T["USDG"], "approve(address,uint256)", C["pool"], str(1_000 * E6))
+    step("10. Dave supplies 1,000 USDC to Arrow")
+    send("dave", T["USDC"], "approve(address,uint256)", C["pool"], str(1_000 * E6))
     send("dave", C["pool"], "deposit(uint256,address)", str(1_000 * E6), ADDR["dave"])
     dave_shares = num(call(C["pool"], "balanceOf(address)(uint256)", ADDR["dave"]))
-    ok(dave_shares > 0, f"Dave holds {dave_shares / 10**12:.2f} arUSDG")
+    ok(dave_shares > 0, f"Dave holds {dave_shares / 10**12:.2f} arUSDC")
 
-    step("11. Erin stakes 500 USDG in the stability pool")
-    send("erin", T["USDG"], "approve(address,uint256)", C["stabilityPool"], str(500 * E6))
-    send("erin", C["stabilityPool"], "depositUSDG(uint256,address)", str(500 * E6), ADDR["erin"])
+    step("11. Erin stakes 500 USDC in the stability pool")
+    send("erin", T["USDC"], "approve(address,uint256)", C["stabilityPool"], str(500 * E6))
+    send("erin", C["stabilityPool"], "depositUSDC(uint256,address)", str(500 * E6), ADDR["erin"])
     erin_sp = num(call(C["stabilityPool"], "balanceOf(address)(uint256)", ADDR["erin"]))
-    ok(erin_sp > 0, f"Erin holds {erin_sp / 10**12:.2f} aSP-USDG (SP share price above 1 after part A's liquidation gain)")
+    ok(erin_sp > 0, f"Erin holds {erin_sp / 10**12:.2f} aSP-USDC (SP share price above 1 after part A's liquidation gain)")
     ok(reverts("erin", C["stabilityPool"], "redeem(uint256,address,address)", str(erin_sp), ADDR["erin"], ADDR["erin"]),
        "instant exit refused (cooldown protects liquidations in flight)")
     send("erin", C["stabilityPool"], "requestExit(uint256)", str(erin_sp))
@@ -500,17 +498,11 @@ def part_b():
         send("frank", C["earnRouter"], "close(address)", A["TSLA"])
     else:
         cap12 = short12 + short12 // 100 + 10_000
-        send("frank", T["USDG"], "approve(address,uint256)", C["earnRouter"], str(cap12))
+        send("frank", T["USDC"], "approve(address,uint256)", C["earnRouter"], str(cap12))
         send("frank", C["earnRouter"], "closeWithTopUp(address,uint256)", A["TSLA"], str(cap12))
-    # The reopen has to come from the keeper, not from us. `pushRedStone`
-    # refuses to write a ticker whose status says closed, so RedStone cannot
-    # lift its own freeze; if the relay skips it here the market stays shut
-    # for good. Reopening by hand in this test is what hid that for a while.
-    if MODE == "fork":
-        # The relay has to carry an observation newer than the close, and on a
-        # fork the clock only moves when told to.
-        cast("rpc", "evm_increaseTime", "30")
-        cast("rpc", "evm_mine")
+    # The reopen has to come from the keeper, not from us: the next signed
+    # report, in session, lifts the freeze.
+    time.sleep(3)  # a report observed after the close
     keeper("prices")
     ok(num(call(A["TSLA"], "MAX_LTV()(uint256)")) == 3_000,
        "the keeper relay reopened the session on its own, weekday terms are back")
@@ -521,7 +513,7 @@ def part_b():
     send("frank", T["wTSLAx"], "approve(address,uint256)", C["earnRouter"], str(10 * E18))
     send("frank", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), "2500")
     f = earn_pos("frank")
-    ok(f["debt"] > 0, f"Frank borrowed {f['debt'] / E6:.2f} USDG")
+    ok(f["debt"] > 0, f"Frank borrowed {f['debt'] / E6:.2f} USDC")
     walk("TSLA", p0 * 715 // 1000)
     keeper("protection")
     f = earn_pos("frank")
@@ -529,12 +521,12 @@ def part_b():
        f"soft-deleveraged to HF {f['hf'] / RAY:.3f}, stock untouched")
     walk("TSLA", p0)
     short = num(call(C["earnRouter"], "closeShortfall(address,address)(uint256)", ADDR["frank"], A["TSLA"]))
-    cap = short + short // 100 + 10_000  # 1% + 0.01 USDG of slack for accrual
-    before = usdg("frank")
-    send("frank", T["USDG"], "approve(address,uint256)", C["earnRouter"], str(cap))
+    cap = short + short // 100 + 10_000  # 1% + 0.01 USDC of slack for accrual
+    before = usdc("frank")
+    send("frank", T["USDC"], "approve(address,uint256)", C["earnRouter"], str(cap))
     send("frank", C["earnRouter"], "closeWithTopUp(address,uint256)", A["TSLA"], str(cap))
-    ok(wtsla("frank") >= 10 * E18, f"Frank closed: 10 wTSLAx back, topped up {short / E6:.4f} USDG "
-       f"(wallet {before / E6:.2f} -> {usdg('frank') / E6:.2f})")
+    ok(wtsla("frank") >= 10 * E18, f"Frank closed: 10 wTSLAx back, topped up {short / E6:.4f} USDC "
+       f"(wallet {before / E6:.2f} -> {usdc('frank') / E6:.2f})")
 
     step("14. Grace: Earn, Amplify stacked on it, unstack, close")
     send("grace", T["wTSLAx"], "approve(address,uint256)", C["earnRouter"], str(10 * E18))
@@ -552,15 +544,15 @@ def part_b():
        f"exposure {amp['exposure'] / E6:.2f}")
     send("grace", C["amplifyRouter"], "close(bool)", "true")
     acct = g["account"]
-    buffer_back = num(call(acct, "redeemableUsdg()(uint256)"))
+    buffer_back = num(call(acct, "redeemableUsdc()(uint256)"))
     ok(num(call(C["sagUSD"], "balanceOf(address)(uint256)", ADDR["grace"])) == 0 and buffer_back > g["debt"] * 99 // 100,
-       f"Amplify closed, equity back in the Earn buffer ({buffer_back / E6:.2f} USDG), nothing leaked to the wallet")
+       f"Amplify closed, equity back in the Earn buffer ({buffer_back / E6:.2f} USDC), nothing leaked to the wallet")
     short = num(call(C["earnRouter"], "closeShortfall(address,address)(uint256)", ADDR["grace"], A["TSLA"]))
     if short == 0:
         send("grace", C["earnRouter"], "close(address)", A["TSLA"])
     else:
         cap = short + short // 100 + 10_000
-        send("grace", T["USDG"], "approve(address,uint256)", C["earnRouter"], str(cap))
+        send("grace", T["USDC"], "approve(address,uint256)", C["earnRouter"], str(cap))
         send("grace", C["earnRouter"], "closeWithTopUp(address,uint256)", A["TSLA"], str(cap))
     ok(wtsla("grace") >= 10 * E18, f"Grace closed Earn on her own buffer: 10 wTSLAx back (top-up {short / E6:.4f})")
 
@@ -572,10 +564,10 @@ def part_b():
         price = num(call(A["TSLA"], "wrapperPrice()(uint256)"))
         spend = 300 * E6
         wtsla_before = wtsla("erin")
-        send("erin", T["USDG"], "faucet(address,uint256)", ADDR["erin"], str(spend))
-        send("erin", T["USDG"], "approve(address,uint256)", C["zapRouter"], str(spend))
-        # calldata the app would get from the OKX aggregator on mainnet; on
-        # testnet the stand-in router prices at the oracle minus 0.3%.
+        send("erin", T["USDC"], "faucet(address,uint256)", ADDR["erin"], str(spend))
+        send("erin", T["USDC"], "approve(address,uint256)", C["zapRouter"], str(spend))
+        # The stand-in router prices at the oracle minus 0.3% (Kuru is
+        # exercised by the agents and Amplify, see test/KuruVenue.t.sol).
         data = subprocess.check_output(
             ["cast", "calldata", "swap(address,uint256,uint256)", T["wTSLAx"], str(spend), str(price)],
             text=True).strip()
@@ -584,7 +576,7 @@ def part_b():
              str(spend), dex, dex, data, A["TSLA"], str(min_out), "2500")
         p = earn_pos("erin")
         ok(p["collateral"] >= min_out and p["debt"] > 0 and wtsla("erin") == wtsla_before,
-           f"bought {p['collateral'] / E18:.6f} wTSLAx with {spend / E6:.0f} USDG and opened at 25% LTV "
+           f"bought {p['collateral'] / E18:.6f} wTSLAx with {spend / E6:.0f} USDC and opened at 25% LTV "
            f"(debt {p['debt'] / E6:.2f}, HF {p['hf'] / RAY:.3f}), nothing left in the wallet")
 
     step("16. Agents: the stock goes up, the position follows, the yield becomes stock")
@@ -604,16 +596,16 @@ def part_b():
     send("buyer", acct, "rebalance(address)", A["TSLA"])  # anyone can run the agent
     f = earn_pos("frank")
     ok(f["debt"] > debt_before and abs(f["debt"] - f["value"] // 4) < f["value"] // 200,
-       f"agent borrowed the difference: debt {debt_before / E6:.2f} -> {f['debt'] / E6:.2f} USDG, back at 25%")
+       f"agent borrowed the difference: debt {debt_before / E6:.2f} -> {f['debt'] / E6:.2f} USDC, back at 25%")
 
     dex = C.get("testDexRouter")
     if dex:
         stock_before = f["collateral"]
         _fund_yield = 200 * E6
-        send("admin", T["USDG"], "faucet(address,uint256)", ADDR["admin"], str(_fund_yield))
-        send("admin", T["USDG"], "transfer(address,uint256)", C["queue"], str(_fund_yield))
+        send("admin", T["USDC"], "faucet(address,uint256)", ADDR["admin"], str(_fund_yield))
+        send("admin", T["USDC"], "transfer(address,uint256)", C["queue"], str(_fund_yield))
         send("admin", C["queue"], "settleYield(uint256)", str(_fund_yield))
-        profit = (num(call(acct, "redeemableUsdg()(uint256)")) - earn_pos("frank")["debt"]) * 999 // 1000
+        profit = (num(call(acct, "redeemableUsdc()(uint256)")) - earn_pos("frank")["debt"]) * 999 // 1000
         if profit > E6:
             price = num(call(A["TSLA"], "wrapperPrice()(uint256)"))
             data = subprocess.check_output(
@@ -625,40 +617,35 @@ def part_b():
             ok(grown > stock_before,
                f"the vault yield came back as stock: {stock_before / E18:.6f} -> {grown / E18:.6f} wTSLAx")
         else:
-            ok(True, f"no yield surplus to compound yet ({profit / E6:.2f} USDG)")
+            ok(True, f"no yield surplus to compound yet ({profit / E6:.2f} USDC)")
     walk("TSLA", p0_now)
 
-    step("17. OKX rail: deposit the base xStock, close back to it")
+    step("17. Deposit the base xStock, close back to it")
     base = call(T["wTSLAx"], "asset()(address)")
-    if MODE == "testnet":
-        send("buyer", base, "faucet(address,uint256)", ADDR["buyer"], str(5 * E18))
-    else:
-        # The base xStock keeps balances at slot 263 (the wrappers use 101).
-        key = subprocess.check_output(["cast", "index", "address", ADDR["buyer"], "263"], text=True).strip()
-        cast("rpc", "anvil_setStorageAt", base, key, "0x" + format(5 * E18, "064x"))
+    send("buyer", base, "faucet(address,uint256)", ADDR["buyer"], str(5 * E18))
     base_before = num(call(base, "balanceOf(address)(uint256)", ADDR["buyer"]))
     send("buyer", base, "approve(address,uint256)", C["earnRouter"], str(5 * E18))
     send("buyer", C["earnRouter"], "openWithBase(address,uint256,uint256)", A["TSLA"], str(5 * E18), "2500")
     p = earn_pos("buyer")
     ok(p["collateral"] > 0 and p["debt"] > 0,
-       f"deposited 5 base xStock straight from the OKX rail: {p['collateral'] / E18:.6f} wrapped, "
-       f"debt {p['debt'] / E6:.2f} USDG")
+       f"deposited 5 base xStock straight from the wallet: {p['collateral'] / E18:.6f} wrapped, "
+       f"debt {p['debt'] / E6:.2f} USDC")
     short = num(call(C["earnRouter"], "closeShortfall(address,address)(uint256)", ADDR["buyer"], A["TSLA"]))
     if short:
         cap = short + short // 100 + 10_000
-        send("buyer", T["USDG"], "approve(address,uint256)", C["earnRouter"], str(cap))
+        send("buyer", T["USDC"], "approve(address,uint256)", C["earnRouter"], str(cap))
         send("buyer", C["earnRouter"], "closeToBaseWithTopUp(address,uint256)", A["TSLA"], str(cap))
     else:
         send("buyer", C["earnRouter"], "closeToBase(address)", A["TSLA"])
     back = num(call(base, "balanceOf(address)(uint256)", ADDR["buyer"]))
     ok(back >= base_before - 10,
-       f"closed back into the base token ({back / E18:.6f}), the form an OKX deposit takes")
+       f"closed back into the base token ({back / E18:.6f}), the token the wallet holds")
 
     step("18. Dave withdraws with interest")
-    before = usdg("dave")
+    before = usdc("dave")
     send("dave", C["pool"], "redeem(uint256,address,address)", str(dave_shares), ADDR["dave"], ADDR["dave"])
-    got = usdg("dave") - before
-    ok(got >= 1_000 * E6, f"Dave redeemed {got / E6:.6f} USDG for 1,000 supplied")
+    got = usdc("dave") - before
+    ok(got >= 1_000 * E6, f"Dave redeemed {got / E6:.6f} USDC for 1,000 supplied")
 
 
 if __name__ == "__main__":

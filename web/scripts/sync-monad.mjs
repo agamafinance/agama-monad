@@ -87,9 +87,9 @@ if (existsSync(deploymentsDir)) {
     if (!m) continue;
     if (m[2] && !withForks) continue;
     const id = m[1];
-    // 1961 is the local anvil fork of Monad. It only exists on a developer's
-    // machine, so it never belongs in a committed or deployed bundle.
-    if (id === "1961" && !withForks) continue;
+    // 31337 is a local anvil. It only exists on a developer's machine, so it
+    // never belongs in a committed or deployed bundle.
+    if (id === "31337" && !withForks) continue;
     if (m[2] && sources[id] && !sources[id].endsWith("-fork.json")) continue;
     if (!m[2] || !all[id]) {
       all[id] = JSON.parse(readFileSync(join(deploymentsDir, f), "utf8"));
@@ -100,7 +100,7 @@ if (existsSync(deploymentsDir)) {
     HEADER +
     `import type {Deployment} from "../deployment-types";\n\n` +
     `export const deployments: Partial<Record<number, Deployment>> = ${JSON.stringify(all, null, 2)};\n\n` +
-    `/// Which file each deployment came from ("196-fork.json" = local fork deploy).\n` +
+    `/// Which file each deployment came from ("<id>-fork.json" = local deploy).\n` +
     `export const deploymentSources: Partial<Record<number, string>> = ${JSON.stringify(sources, null, 2)};\n`;
   writeFileSync(join(genDir, "deployments.ts"), src);
   console.log(`[sync] deployments.ts: ${Object.entries(sources).map(([k, v]) => `${k} (${v})`).join(", ") || "(none)"}`);

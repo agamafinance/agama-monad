@@ -1,9 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { encodeFunctionData, formatUnits, parseAbi, parseUnits, type Address } from 'viem';
+import { encodeFunctionData, formatUnits, parseAbi, parseUnits } from 'viem';
 
-import { ADDR, asset, BPS, RAY, STOCK_DECIMALS, TOKENS, USDG_DECIMALS } from '@/lib/monad/config';
+import { ADDR, asset, BPS, RAY, STOCK_DECIMALS, TOKENS, USDC_DECIMALS } from '@/lib/monad/config';
 import { earnRouterAbi, zapRouterAbi } from '@/lib/monad/generated/abis';
 import {
   ensureAllowance, errorText, send, useTick, useMonadMarkets, useMonadPosition, useMonadProtocol,
@@ -11,21 +11,22 @@ import {
 } from '@/lib/monad/useMonad';
 import { useMonadWallet } from '@/lib/monad/WalletProvider';
 import { TokenIcon } from '@/components/icons/TokenIcon';
+import { NotDeployed, PriceBadge } from '@/components/PriceBadge';
 import { ago, useDepositBaseline, useLastAgentAction } from '@/lib/monad/agents';
 
 /// The testnet stand-in DEX, priced at the Agama oracle and allowlisted on the zap.
 const testDexAbi = parseAbi([
-  'function swap(address wrapper, uint256 usdgIn, uint256 priceUsdg6) returns (uint256 out)',
+  'function swap(address wrapper, uint256 usdcIn, uint256 priceUsdc6) returns (uint256 out)',
 ]);
 
-const pct = (bps: bigint | undefined) => (bps === undefined ? '—' : `${Number(bps) / 100}%`);
+const pct = (bps: bigint | undefined) => (bps === undefined ? '-' : `${Number(bps) / 100}%`);
 const usd = (v: bigint | undefined) =>
-  v === undefined ? '—' : `$${Number(formatUnits(v, USDG_DECIMALS)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  v === undefined ? '-' : `$${Number(formatUnits(v, USDC_DECIMALS)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 const qty = (v: bigint | undefined, dp = 4) =>
-  v === undefined ? '—' : Number(formatUnits(v, STOCK_DECIMALS)).toFixed(dp);
-const rayPct = (v: bigint | undefined) => (v === undefined ? '—' : `${(Number(v) / Number(RAY) * 100).toFixed(2)}%`);
+  v === undefined ? '-' : Number(formatUnits(v, STOCK_DECIMALS)).toFixed(dp);
+const rayPct = (v: bigint | undefined) => (v === undefined ? '-' : `${(Number(v) / Number(RAY) * 100).toFixed(2)}%`);
 const price = (v: bigint | undefined) =>
-  v === undefined || v === 0n ? '—' : `$${Number(formatUnits(v, 18)).toFixed(2)}`;
+  v === undefined || v === 0n ? '-' : `$${Number(formatUnits(v, 18)).toFixed(2)}`;
 
 export default function MonadEarnPage() {
   const { address, connect } = useMonadWallet();
@@ -45,17 +46,16 @@ export default function MonadEarnPage() {
   // the button that was pressed and not in the card next to it.
   const [pending, setPending] = useState<'deposit' | 'close'>('deposit');
 
-  // The app only ever speaks the base token: it is what an OKX withdrawal
-  // sends, what an OKX deposit accepts, and what closing hands back. The
-  // ERC-4626 wrapper the markets hold is wrapped and unwrapped on the way
-  // through, and never named.
+  // The app only ever speaks the base token: the xStock people hold, and what
+  // closing hands back. The ERC-4626 wrapper the markets hold is wrapped and
+  // unwrapped on the way through, and never named.
   const token = m?.base;
   const balance = m?.baseBalance;
   const symbol = m?.stock.base ?? '';
 
   const amt = useMemo(() => {
     try {
-      return amount ? parseUnits(amount, buying ? USDG_DECIMALS : STOCK_DECIMALS) : 0n;
+      return amount ? parseUnits(amount, buying ? USDC_DECIMALS : STOCK_DECIMALS) : 0n;
     } catch {
       return 0n;
     }
@@ -74,50 +74,32 @@ export default function MonadEarnPage() {
     : 0n;
   const ltvBps = canBorrow ? autoLtvBps : 0n;
   const borrowed = m && amt > 0n ? (amt * m.price / 10n ** 18n) * ltvBps / BPS : 0n;
-  const borrowedUsdg = borrowed / 10n ** 12n; // 18 -> 6 decimals
+  const borrowedUsdc = borrowed / 10n ** 12n; // 18 -> 6 decimals
   const spread = proto ? proto.vaultApy - proto.borrowRate : undefined;
   const extra = spread !== undefined ? (spread * ltvBps) / BPS : undefined;
 
   const bump = () => { bumpTick(); refresh(); };
 
-  /// Buy the stock and open the position in one transaction. On testnet the
-  /// allowlisted venue is the oracle-priced stand-in router; on Monad mainnet
-  /// the calldata comes from the OKX aggregator through /api/zap, which signs
-  /// the call server side.
+  /// Buy the stock and open the position in one transaction, through the
+  /// venue allowlisted on the zap.
   async function buyAndEarn() {
     if (!address || !m) return;
     setPending('deposit');
     const zap = ADDR.zapRouter;
     const dex = ADDR.testDexRouter;
-    if (!zap) { setStatus('No zap router on this network'); return; }
+    if (!zap || !dex) { setStatus('No swap venue on this network'); return; }
     setBusy(true);
     try {
-      let target: Address, spender: Address, data: `0x${string}`, minOut: bigint;
-      // Whichever venue this deployment has: the stand-in router when one was
-      // deployed with it, the OKX aggregator otherwise. Keying off the chain id
-      // instead would send a local fork to an API that has never heard of it.
-      if (dex) {
-        if (!m.wrapperPrice) throw new Error('No wrapper price yet');
-        target = dex; spender = dex;
-        data = encodeFunctionData({
-          abi: testDexAbi, functionName: 'swap', args: [m.wrapper, amt, m.wrapperPrice],
-        });
-        minOut = ((amt * 10n ** 18n) / m.wrapperPrice) * 98n / 100n;
-      } else {
-        const res = await fetch('/api/zap', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ mode: 'swap', stock: m.stock.key, amount: amt.toString() }),
-        });
-        const j = await res.json();
-        if (!res.ok) throw new Error(j.error ?? 'aggregator error');
-        target = j.router; spender = j.spender; data = j.data; minOut = BigInt(j.minReceive);
-      }
+      if (!m.wrapperPrice) throw new Error('No price yet');
+      const data = encodeFunctionData({
+        abi: testDexAbi, functionName: 'swap', args: [m.wrapper, amt, m.wrapperPrice],
+      });
+      const minOut = ((amt * 10n ** 18n) / m.wrapperPrice) * 98n / 100n;
       setStatus('Approving…');
-      await ensureAllowance(address, TOKENS.USDG, zap, amt);
+      await ensureAllowance(address, TOKENS.USDC, zap, amt);
       setStatus('Buying and opening…');
       await send(address, zap, zapRouterAbi, 'buyAndEarn',
-        [amt, target, spender, data, m.adapter, minOut, ltvBps]);
+        [amt, dex, dex, data, m.adapter, minOut, ltvBps]);
       setStatus('Done');
       setAmount('');
       bump();
@@ -156,8 +138,8 @@ export default function MonadEarnPage() {
       setStatus('Closing…');
       // A few wei of interest can accrue between the read and the block, so the
       // router is allowed to pull a tiny top-up from the wallet.
-      const topUp = parseUnits('1', USDG_DECIMALS);
-      await ensureAllowance(address, TOKENS.USDG, ADDR.earnRouter, topUp);
+      const topUp = parseUnits('1', USDC_DECIMALS);
+      await ensureAllowance(address, TOKENS.USDC, ADDR.earnRouter, topUp);
       await send(address, ADDR.earnRouter, earnRouterAbi, 'closeToBaseWithTopUp', [m.adapter, topUp]);
       setStatus('Done');
       resetBaseline();
@@ -191,21 +173,23 @@ export default function MonadEarnPage() {
             get more stock
           </h1>
           <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
-            Deposit a tokenized stock, straight out of the OKX app. Agama borrows USDG against it at a safe
-            level, puts it to work in the private-credit vault, and permissionless agents turn that yield
-            back into more of your stock. Nothing to set, nothing to come back for. Live on Monad Testnet.
+            Deposit a tokenized stock. Agama borrows USDC against it at a safe level, puts it to work in
+            the private-credit vault, and permissionless agents turn that yield back into more of your
+            stock. Nothing to set, nothing to come back for. Live on Monad Testnet.
           </p>
+          <PriceBadge markets={markets} />
 
           <div className="mt-7 flex flex-wrap gap-8">
             <Stat label="Vault APY" value={rayPct(proto?.vaultApy)} sub={proto?.vaultApyIsTarget ? 'Target, not yet measured' : 'Realized'} />
-            <Stat label="Borrow APR" value={rayPct(proto?.borrowRate)} sub="USDG, variable" />
-            <Stat label="Spread you earn" value={rayPct(spread)} sub="On every USDG borrowed" />
+            <Stat label="Borrow APR" value={rayPct(proto?.borrowRate)} sub="USDC, variable" />
+            <Stat label="Spread you earn" value={rayPct(spread)} sub="On every USDC borrowed" />
           </div>
         </div>
       </section>
 
       <section className="vault-panel relative z-10 rounded-t-[20px] px-6 md:px-24 pt-10 md:pt-14 pb-24">
         <div className="max-w-[1400px] mx-auto space-y-5">
+          <NotDeployed />
           <MarketCards markets={markets} sel={sel} onSelect={setSel} connected={!!address} />
 
           <div className="grid gap-5 lg:grid-cols-[1fr_1fr] items-start">
@@ -238,18 +222,18 @@ export default function MonadEarnPage() {
               <p className="mt-2 text-[12px] text-fg-muted">
                 {buying
                   ? 'Do not hold the stock yet? One transaction buys it and opens the position with it.'
-                  : `Withdraw ${symbol || 'your stock'} from the OKX app to Monad and deposit it here. Closing hands the same token back, ready for an OKX deposit.`}
+                  : `Deposit ${symbol || 'your stock'} as it is. Closing hands the same token back.`}
               </p>
 
               <div className="mt-4 rounded-2xl border border-[#254839]/12 bg-white/60 p-4">
                 <div className="flex items-center justify-between text-[12px] text-fg-muted">
                   <span>{buying ? 'Spend' : 'Deposit'}</span>
                   <button
-                    onClick={() => setAmount(formatUnits(buying ? (proto?.usdg ?? 0n) : (balance ?? 0n), buying ? USDG_DECIMALS : STOCK_DECIMALS))}
+                    onClick={() => setAmount(formatUnits(buying ? (proto?.usdc ?? 0n) : (balance ?? 0n), buying ? USDC_DECIMALS : STOCK_DECIMALS))}
                     className="hover:text-fg"
                   >
                     Balance {buying
-                      ? Number(formatUnits(proto?.usdg ?? 0n, USDG_DECIMALS)).toFixed(2)
+                      ? Number(formatUnits(proto?.usdc ?? 0n, USDC_DECIMALS)).toFixed(2)
                       : qty(balance)} · Max
                   </button>
                 </div>
@@ -262,7 +246,7 @@ export default function MonadEarnPage() {
                     className="w-full bg-transparent text-[28px] font-semibold text-fg tabular-nums outline-none placeholder:text-fg-muted/40"
                   />
                   <span className="shrink-0 rounded-full bg-[#254839]/[0.06] px-3 py-1.5 text-[14px] font-medium text-fg">
-                    {buying ? 'USDG' : symbol}
+                    {buying ? 'USDC' : symbol}
                   </span>
                 </div>
                 <div className="mt-1 text-[12px] text-fg-muted">
@@ -275,17 +259,16 @@ export default function MonadEarnPage() {
               <dl className="mt-4 space-y-2 text-[13px]">
                 <Row
                   label="Borrowed into the vault"
-                  value={borrowedUsdg > 0n ? `${usd(borrowedUsdg)} · ${pct(ltvBps)} of the stock` : '—'}
+                  value={borrowedUsdc > 0n ? `${usd(borrowedUsdc)} · ${pct(ltvBps)} of the stock` : '-'}
                 />
-                <Row label="Extra yield on the stock" value={extra !== undefined && ltvBps > 0n ? `${rayPct(extra)} a year` : '—'} />
+                <Row label="Extra yield on the stock" value={extra !== undefined && ltvBps > 0n ? `${rayPct(extra)} a year` : '-'} />
                 <Row label="Health factor at open" value={canBorrow ? '1.60' : 'No price'} />
               </dl>
               {m && !m.marketOpen && canBorrow && (
                 <p className="mt-3 text-[12px] text-fg-muted">
-                  Nobody has priced {m.stock.base} recently: neither the equity feed nor the token&apos;s own
-                  market answered, so this is the last price anyone signed. Deposit and borrow all the
-                  same, at {pct(m.maxLtv)} rather than the usual level, which leaves the position the same
-                  distance from liquidation until a fresh price lands.
+                  The market for {m.stock.base} is closed, so this is its last close, signed by Chainlink.
+                  Deposit and borrow all the same, at {pct(m.maxLtv)} rather than the usual level, which
+                  leaves the position the same distance from liquidation until the session reopens.
                 </p>
               )}
               {!canBorrow && (
@@ -299,7 +282,7 @@ export default function MonadEarnPage() {
                 onClick={address ? (buying ? buyAndEarn : open) : () => connect()}
                 disabled={
                   busy ||
-                  (!!address && (amt === 0n || amt > (buying ? (proto?.usdg ?? 0n) : (balance ?? 0n))))
+                  (!!address && (amt === 0n || amt > (buying ? (proto?.usdc ?? 0n) : (balance ?? 0n))))
                 }
                 className="mt-4 w-full rounded-full bg-[#254839] px-5 py-3.5 text-[15px] font-medium text-[#fdf8ed] transition-colors hover:bg-[#1F3D31] disabled:opacity-45"
               >
@@ -324,7 +307,7 @@ export default function MonadEarnPage() {
               {!has ? (
                 <p className="mt-4 text-[14px] text-fg-muted">
                   Nothing here yet. Deposit a stock and the protocol does the rest: it borrows against it,
-                  puts the USDG to work, and keeps the position where it should be.
+                  puts the USDC to work, and keeps the position where it should be.
                 </p>
               ) : (
                 <>
@@ -363,9 +346,9 @@ export default function MonadEarnPage() {
                         ? lastAction.kind === 'rebalance'
                           ? `Last action: debt ${(lastAction.debtDelta ?? 0n) >= 0n ? '+' : '-'}${usd(
                               (lastAction.debtDelta ?? 0n) < 0n ? -(lastAction.debtDelta ?? 0n) : lastAction.debtDelta ?? 0n,
-                            ).replace('$', '')} USDG, ${ago(lastAction.at)}`
+                            ).replace('$', '')} USDC, ${ago(lastAction.at)}`
                           : `Last action: ${qty(lastAction.stockAdded)} ${m?.stock.base} bought with the yield, ${ago(lastAction.at)}`
-                        : 'No action in the last 100 blocks. The position is on target.'}
+                        : 'No action in the last few minutes. The position is on target.'}
                     </p>
                   </div>
                   <button
@@ -373,7 +356,7 @@ export default function MonadEarnPage() {
                     disabled={busy}
                     className="mt-4 w-full rounded-full border border-[#254839]/25 px-5 py-3.5 text-[15px] font-medium text-fg transition-colors hover:bg-[#254839]/[0.06] disabled:opacity-45"
                   >
-                    Close, send the stock back to OKX
+                    Close, get the stock back
                   </button>
                 </>
               )}
@@ -414,9 +397,8 @@ function MarketCards({
           </div>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-[22px] font-semibold tabular-nums">{price(m.price)}</span>
-            {/* The price moves around the clock now: in session it is the
-                equity feed, out of it the xStock's own market on Solana. So
-                its age is the honest thing to show, always. */}
+            {/* Chainlink streams every session (regular, extended,
+                overnight), so its age is the honest thing to show. */}
             <span className="text-[11px] opacity-70">{ago(m.observedAt)}</span>
           </div>
           <div className="mt-1 text-[11px] opacity-70">

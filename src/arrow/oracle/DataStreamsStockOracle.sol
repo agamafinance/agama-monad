@@ -68,7 +68,9 @@ contract DataStreamsStockOracle is StockOracle {
     /// @notice Bit i set = marketStatus i counts as open.
     uint32 public openStatusMask = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4);
 
-    event StreamSet(bytes32 indexed feedId, bytes32 indexed ticker, uint8 decimals, bool enabled, uint32 sessions);
+    event StreamSet(
+        bytes32 indexed feedId, bytes32 indexed ticker, uint8 decimals, bool enabled, uint32 sessions
+    );
     event OpenStatusMaskSet(uint32 mask);
     event ReportAccepted(bytes32 indexed feedId, bytes32 indexed ticker, uint256 price, uint32 marketStatus);
 
@@ -129,7 +131,8 @@ contract DataStreamsStockOracle is StockOracle {
         onlyRole(GOVERNOR_ROLE)
     {
         if (!_feeds[ticker].exists) revert UnknownTicker(ticker);
-        streams[feedId] = StreamConfig({ticker: ticker, decimals: decimals, enabled: enabled, sessions: sessions});
+        streams[feedId] =
+            StreamConfig({ticker: ticker, decimals: decimals, enabled: enabled, sessions: sessions});
         emit StreamSet(feedId, ticker, decimals, enabled, sessions);
     }
 

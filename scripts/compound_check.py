@@ -102,7 +102,7 @@ def main():
 
     debt = num(cast("call", C["pool"], "getPositionScaledDebt(address,address,bytes)(uint256)",
                     A["TSLA"], account, "0x"))
-    have = num(cast("call", account, "redeemableUsdg()(uint256)"))
+    have = num(cast("call", account, "redeemableUsdc()(uint256)"))
     profit = (have - debt) * 999 // 1000  # interest accrues before inclusion
     print(f"   buffer {have / 1e6:.2f} USDG against {debt / 1e6:.2f} of debt, surplus {profit / 1e6:.2f}")
     if profit < 10**6:

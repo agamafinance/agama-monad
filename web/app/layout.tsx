@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     default: 'Agama',
     template: 'Agama | %s',
   },
-  description: 'Earn yield backed by RWA.',
+  description: 'Deposit a tokenized stock, get more of it back. On Monad.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

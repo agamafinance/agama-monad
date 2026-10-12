@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatUnits, parseUnits } from 'viem';
 
-import { ADDR, TOKENS, USDG_DECIMALS } from '@/lib/monad/config';
+import { ADDR, DEPLOYED, TOKENS, USDC_DECIMALS } from '@/lib/monad/config';
 import { lendingPoolAbi } from '@/lib/monad/generated/abis';
 import {
   ensureAllowance, erc20Abi, errorText, pub, send, useTick, useMonadProtocol,
@@ -11,8 +11,8 @@ import {
 import { useMonadWallet } from '@/lib/monad/WalletProvider';
 
 const usd = (v: bigint | undefined) =>
-  v === undefined ? '—' : `$${Number(formatUnits(v, USDG_DECIMALS)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
-const rayPct = (v: bigint | undefined) => (v === undefined ? '—' : `${(Number(v) / 1e27 * 100).toFixed(2)}%`);
+  v === undefined ? '-' : `$${Number(formatUnits(v, USDC_DECIMALS)).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+const rayPct = (v: bigint | undefined) => (v === undefined ? '-' : `${(Number(v) / 1e27 * 100).toFixed(2)}%`);
 
 export default function MonadLendPage() {
   const { address, connect } = useMonadWallet();
@@ -26,6 +26,7 @@ export default function MonadLendPage() {
   const [status, setStatus] = useState('');
 
   useEffect(() => {
+    if (!DEPLOYED) return;
     let alive = true;
     (async () => {
       try {
@@ -58,13 +59,13 @@ export default function MonadLendPage() {
 
   const amt = useMemo(() => {
     try {
-      return amount ? parseUnits(amount, USDG_DECIMALS) : 0n;
+      return amount ? parseUnits(amount, USDC_DECIMALS) : 0n;
     } catch {
       return 0n;
     }
   }, [amount]);
 
-  const max = tab === 'supply' ? (proto?.usdg ?? 0n) : (pool?.redeemable ?? 0n);
+  const max = tab === 'supply' ? (proto?.usdc ?? 0n) : (pool?.redeemable ?? 0n);
 
   async function submit() {
     if (!address) return;
@@ -72,7 +73,7 @@ export default function MonadLendPage() {
     try {
       if (tab === 'supply') {
         setStatus('Approving…');
-        await ensureAllowance(address, TOKENS.USDG, ADDR.pool, amt);
+        await ensureAllowance(address, TOKENS.USDC, ADDR.pool, amt);
         setStatus('Supplying…');
         await send(address, ADDR.pool, lendingPoolAbi, 'deposit', [amt, address]);
       } else {
@@ -94,19 +95,19 @@ export default function MonadLendPage() {
       <section className="px-6 md:px-24 pt-10 md:pt-14 pb-8">
         <div className="max-w-[1400px] mx-auto">
           <h1 className="mt-3 text-[34px] md:text-[44px] leading-[1.05] text-fg font-semibold">
-            Lend USDG
+            Lend USDC
             <br />
             against tokenized stocks
           </h1>
           <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
-            Supply USDG to the Arrow lending pool. Every borrower is overcollateralized by a tokenized
+            Supply USDC to the Arrow lending pool. Every borrower is overcollateralized by a tokenized
             equity or by Agama vault shares, priced by our own on-chain oracle, and liquidations are
             absorbed by a stability pool rather than by a thin DEX.
           </p>
 
           <div className="mt-7 flex flex-wrap gap-8">
             <Stat label="Supply APR" value={rayPct(pool?.supplyRate)} sub="Paid by borrowers" />
-            <Stat label="Pool size" value={usd(pool?.assets)} sub="USDG supplied" />
+            <Stat label="Pool size" value={usd(pool?.assets)} sub="USDC supplied" />
             <Stat label="Your supply" value={usd(pool?.redeemable)} sub="Redeemable now" />
           </div>
         </div>
@@ -134,8 +135,8 @@ export default function MonadLendPage() {
             <div className="mt-4 rounded-2xl border border-[#254839]/12 bg-white/60 p-4">
               <div className="flex items-center justify-between text-[12px] text-fg-muted">
                 <span>{tab === 'supply' ? 'Supply' : 'Withdraw'}</span>
-                <button onClick={() => setAmount(formatUnits(max, USDG_DECIMALS))} className="hover:text-fg">
-                  {tab === 'supply' ? 'Wallet' : 'Supplied'} {Number(formatUnits(max, USDG_DECIMALS)).toFixed(2)} · Max
+                <button onClick={() => setAmount(formatUnits(max, USDC_DECIMALS))} className="hover:text-fg">
+                  {tab === 'supply' ? 'Wallet' : 'Supplied'} {Number(formatUnits(max, USDC_DECIMALS)).toFixed(2)} · Max
                 </button>
               </div>
               <div className="mt-1.5 flex items-center justify-between">
@@ -146,7 +147,7 @@ export default function MonadLendPage() {
                   onChange={(e) => setAmount(e.target.value)}
                   className="w-full bg-transparent text-[28px] font-semibold text-fg tabular-nums outline-none placeholder:text-fg-muted/40"
                 />
-                <span className="shrink-0 rounded-full bg-[#254839]/[0.06] px-3 py-1.5 text-[14px] font-medium text-fg">USDG</span>
+                <span className="shrink-0 rounded-full bg-[#254839]/[0.06] px-3 py-1.5 text-[14px] font-medium text-fg">USDC</span>
               </div>
             </div>
 
@@ -155,18 +156,18 @@ export default function MonadLendPage() {
               disabled={busy || (!!address && (amt === 0n || amt > max))}
               className="mt-4 w-full rounded-full bg-[#254839] px-5 py-3.5 text-[15px] font-medium text-[#fdf8ed] transition-colors hover:bg-[#1F3D31] disabled:opacity-45"
             >
-              {!address ? 'Connect Wallet' : busy ? status || 'Working…' : tab === 'supply' ? 'Supply USDG' : 'Withdraw USDG'}
+              {!address ? 'Connect Wallet' : busy ? status || 'Working…' : tab === 'supply' ? 'Supply USDC' : 'Withdraw USDC'}
             </button>
             {status && !busy && <p className="mt-2 text-[12px] text-fg-muted">{status}</p>}
           </div>
 
           <div className="rounded-2xl bg-[#fdfaf1] p-6 shadow-[0_1px_3px_rgba(20,50,35,0.06),0_10px_30px_rgba(20,50,35,0.09)]">
-            <h2 className="text-[17px] font-semibold text-fg">What backs your USDG</h2>
+            <h2 className="text-[17px] font-semibold text-fg">What backs your USDC</h2>
             <dl className="mt-4 space-y-2 text-[13px]">
-              <Row label="Collateral" value="wTSLAx, wNVDAx, wSPYx, wAAPLx, vault shares" />
-              <Row label="Price" value="RedStone reports, verified on chain" />
+              <Row label="Collateral" value="TSLAx, NVDAx, SPYx, AAPLx, vault shares" />
+              <Row label="Price" value="Chainlink Data Streams, verified on chain by Chainlink's Verifier" />
               <Row label="Liquidation" value="Partial, absorbed by the stability pool" />
-              <Row label="Always open" value="Priced around the clock, off the stock in session and off the token out of it" />
+              <Row label="Always open" value="Priced in every session Chainlink streams: regular, extended and overnight" />
             </dl>
             <p className="mt-4 rounded-2xl border border-[#254839]/12 bg-white/60 p-4 text-[13px] text-fg-muted">
               A borrower is never liquidated on the first dip: under a health factor of 1.15 anyone can

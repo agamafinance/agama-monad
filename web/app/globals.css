@@ -84,7 +84,7 @@ body {
 /* ============== Hero + Vault panel ==============
    Same gradient on both sections: starts at our ivory beige #fdf8ed at the
    top and fades to pure white #ffffff at the bottom. The vault-panel
-   restarts at ivory at its rounded-corner top — that "fresh ivory" reads
+   restarts at ivory at its rounded-corner top: that "fresh ivory" reads
    as the soft step between Hero and the vault list. */
 .hero-glow {
   background: linear-gradient(180deg, #fdf8ed 0%, #fdf8ed 80%, #ffffff 100%);
@@ -95,7 +95,7 @@ body {
   border-top: 1px solid #fdf8ed;
 }
 
-/* ============== Pills / chips (navbar — on green outer) ============== */
+/* ============== Pills / chips (navbar: on green outer) ============== */
 .pill-bar {
   background: rgba(20, 39, 31, 0.55);
 }

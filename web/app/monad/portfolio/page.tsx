@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { formatUnits, type Address } from 'viem';
 
 import { TokenIcon } from '@/components/icons/TokenIcon';
-import { ADAPTERS, ADDR, EXPLORER, RAY, STOCK_DECIMALS, STOCKS, TOKENS, USDG_DECIMALS } from '@/lib/monad/config';
+import { ADAPTERS, ADDR, DEPLOYED, EXPLORER, RAY, STOCK_DECIMALS, STOCKS, TOKENS, USDC_DECIMALS } from '@/lib/monad/config';
 import { accountAbi, amplifyRouterAbi, earnRouterAbi, lendingPoolAbi, stockOracleAbi } from '@/lib/monad/generated/abis';
 import {
   atLiveRate, baseTokens, erc20Abi, pub, useTick, useMonadProtocol,
@@ -14,7 +14,7 @@ import {
 import { useMonadWallet } from '@/lib/monad/WalletProvider';
 
 const usd = (v: bigint) =>
-  `$${Number(formatUnits(v, USDG_DECIMALS)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `$${Number(formatUnits(v, USDC_DECIMALS)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const qty = (v: bigint, dp = 2) => Number(formatUnits(v, STOCK_DECIMALS)).toFixed(dp);
 
 const ZERO = '0x0000000000000000000000000000000000000000';
@@ -45,7 +45,7 @@ export default function MonadPortfolioPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!address) { setStocks([]); setAmp(null); setSupplied(0n); setBuffer(0n); setLoaded(false); return; }
+    if (!DEPLOYED || !address) { setStocks([]); setAmp(null); setSupplied(0n); setBuffer(0n); setLoaded(false); return; }
     let alive = true;
     (async () => {
       try {
@@ -88,7 +88,7 @@ export default function MonadPortfolioPage() {
             }).catch(() => shares) as Promise<bigint>;
           })),
           acct ? pub.readContract({
-            address: acct, abi: accountAbi, functionName: 'redeemableUsdg',
+            address: acct, abi: accountAbi, functionName: 'redeemableUsdc',
           }).catch(() => 0n) as Promise<bigint> : Promise.resolve(0n),
           poolShares > 0n ? pub.readContract({
             address: ADDR.pool, abi: lendingPoolAbi, functionName: 'convertToAssets', args: [poolShares],
@@ -96,7 +96,7 @@ export default function MonadPortfolioPage() {
           atLiveRate(amp0),
         ]);
         // One holding, wherever it sits: pledged as collateral, wrapped in the
-        // wallet, or in the base token OKX sends. Said and priced in the base
+        // wallet, or as the xStock itself. Said and priced in the base
         // token, the one the app names.
         const rows = STOCKS.map((st, i) => {
           const amount = inBase[i] + held[i];
@@ -122,8 +122,8 @@ export default function MonadPortfolioPage() {
     return () => { alive = false; };
   }, [address, tick]);
 
-  const wallet = proto?.usdg ?? 0n;
-  // The USDG row comes from another hook, so wait for that one too rather than
+  const wallet = proto?.usdc ?? 0n;
+  // The USDC row comes from another hook, so wait for that one too rather than
   // paint a wallet of zero next to real positions.
   const ready = loaded && !!proto;
   // What the wallet would be worth if everything were unwound right now: the
@@ -191,7 +191,7 @@ export default function MonadPortfolioPage() {
                   icon="sagUSD"
                   title="Amplify"
                   name={`Vault loop at ${(Number(amp.leverageBps) / 10_000).toFixed(2)}x`}
-                  amount={Number(formatUnits(amp.exposure, USDG_DECIMALS)).toFixed(2)}
+                  amount={Number(formatUnits(amp.exposure, USDC_DECIMALS)).toFixed(2)}
                   sub={`${usd(amp.equity)} of equity · ${usd(amp.debt)} borrowed`}
                   href="/monad/amplify"
                 />
@@ -199,20 +199,20 @@ export default function MonadPortfolioPage() {
 
               {supplied > 0n && (
                 <Row
-                  icon="USDG"
+                  icon="USDC"
                   title="Supplied to Arrow"
-                  name="Lending USDG against tokenized stocks"
-                  amount={Number(formatUnits(supplied, USDG_DECIMALS)).toFixed(2)}
+                  name="Lending USDC against tokenized stocks"
+                  amount={Number(formatUnits(supplied, USDC_DECIMALS)).toFixed(2)}
                   sub={`${usd(supplied)} · redeemable now`}
                   href="/monad/lend"
                 />
               )}
 
               <Row
-                icon="USDG"
-                title="USDG"
-                name="Global Dollar"
-                amount={Number(formatUnits(wallet, USDG_DECIMALS)).toFixed(2)}
+                icon="USDC"
+                title="USDC"
+                name="USD Coin, test"
+                amount={Number(formatUnits(wallet, USDC_DECIMALS)).toFixed(2)}
                 sub={usd(wallet)}
                 href="/monad/faucet"
               />
@@ -221,7 +221,7 @@ export default function MonadPortfolioPage() {
                 <p className="rounded-2xl bg-[#fdfaf1] px-5 py-4 text-[14px] text-fg-muted shadow-[0_1px_3px_rgba(20,50,35,0.06)]">
                   No position yet. Deposit a stock on{' '}
                   <Link href="/monad" className="underline underline-offset-2">Earn</Link> and the agents take it
-                  from there, or lend USDG on{' '}
+                  from there, or lend USDC on{' '}
                   <Link href="/monad/lend" className="underline underline-offset-2">Arrow</Link>.
                 </p>
               )}

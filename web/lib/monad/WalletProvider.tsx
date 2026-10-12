@@ -5,6 +5,7 @@ import { useWallet } from './useMonad';
 
 const Ctx = createContext<ReturnType<typeof useWallet>>({
   address: undefined,
+  kind: undefined,
   connect: async () => {},
   disconnect: () => {},
 });

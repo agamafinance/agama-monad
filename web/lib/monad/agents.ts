@@ -10,20 +10,20 @@ import { pub } from './useMonad';
 /// only thing the page needs to show that the position is being looked after.
 const agentEvents = parseAbi([
   'event Rebalanced(address indexed caller, address indexed adapter, int256 debtDelta, uint256 ltvBpsAfter)',
-  'event CompoundedIntoStock(address indexed caller, address indexed adapter, uint256 usdgSpent, uint256 stockAdded)',
+  'event CompoundedIntoStock(address indexed caller, address indexed adapter, uint256 usdcSpent, uint256 stockAdded)',
 ]);
 
 export interface AgentAction {
   kind: 'rebalance' | 'compound';
-  /// USDG of debt moved, signed, for a rebalance.
+  /// USDC of debt moved, signed, for a rebalance.
   debtDelta?: bigint;
   /// Stock added to the collateral, for a compound.
   stockAdded?: bigint;
   at: number; // unix seconds
 }
 
-/// The public RPC caps `eth_getLogs` at a 100 block range, so this is a recent
-/// window, not a history. That is enough for the only question the page asks:
+/// Public RPCs cap the `eth_getLogs` range, so this is a recent window, not a
+/// history. That is enough for the only question the page asks:
 /// is something still happening on this position?
 export function useLastAgentAction(account: Address | undefined, tick: number) {
   const [action, setAction] = useState<AgentAction>();
@@ -34,8 +34,13 @@ export function useLastAgentAction(account: Address | undefined, tick: number) {
     (async () => {
       try {
         const head = await pub.getBlockNumber();
-        const fromBlock = head > 99n ? head - 99n : 0n;
-        const logs = await pub.getLogs({ address: account, events: agentEvents, fromBlock, toBlock: head });
+        // Monad makes a block every 0.4 s, so a window has to be wide to mean
+        // anything: about six minutes, and the 100 blocks every RPC serves if
+        // the wide one is refused.
+        const window = async (span: bigint) => pub.getLogs({
+          address: account, events: agentEvents, fromBlock: head > span ? head - span : 0n, toBlock: head,
+        });
+        const logs = await window(999n).catch(() => window(99n));
         const last = logs[logs.length - 1];
         if (!last || !alive) return;
         const block = await pub.getBlock({ blockNumber: last.blockNumber });

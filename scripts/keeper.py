@@ -261,7 +261,7 @@ def tick_agents(dep):
             if value:
                 wanted = value * target // 10_000
                 band = value // 100
-                buffer_ = first_int(call(acct, "redeemableUsdg()(uint256)"))
+                buffer_ = first_int(call(acct, "redeemableUsdc()(uint256)"))
                 actionable = (wanted > debt + band) or (debt > wanted + band and buffer_ > 0)
                 if actionable:
                     try:
@@ -273,7 +273,7 @@ def tick_agents(dep):
 
             debt = first_int(call(pool, "getPositionScaledDebt(address,address,bytes)(uint256)",
                                   adapter, acct, "0x"))
-            have = first_int(call(acct, "redeemableUsdg()(uint256)"))
+            have = first_int(call(acct, "redeemableUsdc()(uint256)"))
             profit = have - debt if have > debt else 0
             profit = profit * 999 // 1000  # the surplus shrinks with interest before inclusion
             if profit < 10**6:  # under 1 USDC, not worth the gas

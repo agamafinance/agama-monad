@@ -3,19 +3,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   createPublicClient, createWalletClient, custom, encodeFunctionData, fallback, http, type Address,
+  type LocalAccount,
 } from 'viem';
 
 import {
-  ADAPTERS, ADDR, AG_PER_USDG, CHAIN_ID_HEX, RAY, READ_RPCS, STOCKS, TARGET_VAULT_APY_RAY, TOKENS,
-  USDG_DECIMALS, xLayerTestnet, type Stock,
+  ADAPTERS, ADDR, AG_PER_USDC, CHAIN_ID_HEX, DEPLOYED, RAY, READ_RPCS, STOCKS, TARGET_VAULT_APY_RAY, TOKENS,
+  USDC_DECIMALS, monadChain, type Stock,
 } from './config';
+import { signInWithPasskey, signOutPasskey } from './passkey';
 import {
   accountAbi, amplifyRouterAbi, earnRouterAbi, lendingPoolAbi, stockOracleAbi,
   vaultShareAdapterAbi, xStockAdapterAbi,
 } from './generated/abis';
 
 export const pub = createPublicClient({
-  chain: xLayerTestnet,
+  chain: monadChain,
   // Ranked by measured latency, and any endpoint that starts erroring is
   // dropped for the next call. Reads only: a write goes through the wallet's
   // own provider.
@@ -51,9 +53,9 @@ export interface Market {
   maxLtv: bigint; // bps
   liqThreshold: bigint; // bps, already lowered by the weekend buffer when closed
   baseLiqThreshold: bigint; // bps, market open
-  wrapperPrice: bigint; // USDG (6 decimals) for one wrapped share
+  wrapperPrice: bigint; // USDC (6 decimals) for one wrapped share
   balance: bigint; // wrapped, in the wallet
-  baseBalance: bigint; // the token an OKX withdrawal delivers
+  baseBalance: bigint; // the xStock itself, the token people hold
   base?: Address;
 }
 
@@ -75,7 +77,7 @@ export interface Position extends RouterPosition {
   targetLtvBps: bigint;
   /// The collateral counted in the base token, which is the only one the app
   /// names: the pool holds ERC-4626 shares, the user deposited and will get
-  /// back the thing OKX sends.
+  /// back the xStock itself.
   collateralBase: bigint;
   /// The vault buffer at the rate it would actually be redeemed at, where
   /// `freeSharesValue` is the same shares at the CAPO-capped rate Arrow lends
@@ -88,7 +90,7 @@ export interface Protocol {
   vaultApy: bigint; // ray
   vaultApyIsTarget: boolean;
   borrowRate: bigint; // ray
-  usdg: bigint; // wallet balance
+  usdc: bigint; // wallet balance
 }
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
@@ -144,6 +146,7 @@ export function useMonadMarkets(address?: Address) {
   }, [refresh]);
 
   useEffect(() => {
+    if (!DEPLOYED) return;
     let alive = true;
     (async () => {
       try {
@@ -211,7 +214,7 @@ export function useMonadPosition(
   const [position, setPosition] = useState<Position | null>(null);
 
   useEffect(() => {
-    if (!address || !adapter || !wrapper) { setPosition(null); return; }
+    if (!DEPLOYED || !address || !adapter || !wrapper) { setPosition(null); return; }
     let alive = true;
     (async () => {
       try {
@@ -226,7 +229,7 @@ export function useMonadPosition(
             address: wrapper, abi: erc20Abi, functionName: 'convertToAssets', args: [p.collateral],
           }).catch(() => p.collateral) as Promise<bigint>,
           p.account === ZERO ? Promise.resolve(0n) : pub.readContract({
-            address: p.account, abi: accountAbi, functionName: 'redeemableUsdg',
+            address: p.account, abi: accountAbi, functionName: 'redeemableUsdc',
           }).catch(() => p.freeSharesValue) as Promise<bigint>,
         ]);
         if (alive) {
@@ -249,14 +252,15 @@ export function useMonadProtocol(address: Address | undefined, tick: number) {
   const [proto, setProto] = useState<Protocol | null>(null);
 
   useEffect(() => {
+    if (!DEPLOYED) return;
     let alive = true;
     (async () => {
       try {
-        const [apy, reserve, usdg] = await Promise.all([
+        const [apy, reserve, usdc] = await Promise.all([
           pub.readContract({ address: ADAPTERS.VAULT, abi: vaultShareAdapterAbi, functionName: 'realizedApyRay' }).catch(() => 0n),
           pub.readContract({ address: ADDR.pool, abi: lendingPoolAbi, functionName: 'getReserveState' }),
           address
-            ? pub.readContract({ address: TOKENS.USDG, abi: erc20Abi, functionName: 'balanceOf', args: [address] })
+            ? pub.readContract({ address: TOKENS.USDC, abi: erc20Abi, functionName: 'balanceOf', args: [address] })
             : Promise.resolve(0n),
         ]);
         const measured = apy as bigint;
@@ -265,7 +269,7 @@ export function useMonadProtocol(address: Address | undefined, tick: number) {
             vaultApy: measured > 0n ? measured : TARGET_VAULT_APY_RAY,
             vaultApyIsTarget: measured === 0n,
             borrowRate: (reserve as { currentBorrowRate: bigint }).currentBorrowRate,
-            usdg: usdg as bigint,
+            usdc: usdc as bigint,
           });
         }
       } catch (e) {
@@ -303,7 +307,7 @@ export async function atLiveRate(p: AmplifyPosition): Promise<AmplifyPosition> {
   const assets = (await pub.readContract({
     address: ADDR.sagUSD, abi: erc20Abi, functionName: 'convertToAssets', args: [p.pledgedShares],
   }).catch(() => 0n)) as bigint;
-  const exposure = assets / AG_PER_USDG;
+  const exposure = assets / AG_PER_USDC;
   if (exposure <= p.debt) return p;
   const equity = exposure - p.debt;
   return { ...p, exposure, equity, leverageBps: (exposure * 10_000n) / equity };
@@ -313,7 +317,7 @@ export function useAmplifyPosition(address: Address | undefined, tick: number) {
   const [pos, setPos] = useState<AmplifyPosition | null>(null);
 
   useEffect(() => {
-    if (!address) { setPos(null); return; }
+    if (!DEPLOYED || !address) { setPos(null); return; }
     let alive = true;
     (async () => {
       try {
@@ -334,11 +338,7 @@ export function useAmplifyPosition(address: Address | undefined, tick: number) {
 
 // ---- wallet -----------------------------------------------------------------
 
-/// The wallets this page will talk to, in the order it offers them.
-///
-/// OKX first, because this is an OKX chain and the deposit path starts with a
-/// withdrawal from the OKX app. Rabby and MetaMask next, because plenty of
-/// people testing this have one of those and nothing else.
+/// The browser wallets this page offers, in order, after the passkey.
 ///
 /// A wallet is found by its EIP-6963 announcement where it makes one, which is
 /// the only way to tell two extensions apart when both are installed: sniffing
@@ -356,11 +356,13 @@ export interface WalletKind {
 
 export const WALLETS: WalletKind[] = [
   {
-    id: 'okx',
-    name: 'OKX Wallet',
-    rdns: ['com.okex.wallet', 'com.okx.wallet'],
-    download: 'https://web3.okx.com/download',
-    legacy: (w) => w.okxwallet ?? pickInjected(w, (p) => p.isOkxWallet === true || p.isOKExWallet === true),
+    id: 'metamask',
+    name: 'MetaMask',
+    rdns: ['io.metamask', 'io.metamask.flask'],
+    download: 'https://metamask.io/download/',
+    // `isMetaMask` on its own proves nothing, so this only answers when no
+    // other wallet has claimed the provider.
+    legacy: (w) => pickInjected(w, (p) => p.isMetaMask === true && !p.isRabby && !p.isPhantom && !p.isBackpack),
   },
   {
     id: 'rabby',
@@ -370,13 +372,18 @@ export const WALLETS: WalletKind[] = [
     legacy: (w) => pickInjected(w, (p) => p.isRabby === true),
   },
   {
-    id: 'metamask',
-    name: 'MetaMask',
-    rdns: ['io.metamask', 'io.metamask.flask'],
-    download: 'https://metamask.io/download/',
-    // `isMetaMask` on its own proves nothing, so this only answers when no
-    // other wallet has claimed the provider.
-    legacy: (w) => pickInjected(w, (p) => p.isMetaMask === true && !p.isRabby && !p.isOkxWallet),
+    id: 'phantom',
+    name: 'Phantom',
+    rdns: ['app.phantom'],
+    download: 'https://phantom.com/download',
+    legacy: (w) => w.phantom?.ethereum,
+  },
+  {
+    id: 'backpack',
+    name: 'Backpack',
+    rdns: ['app.backpack'],
+    download: 'https://backpack.app/download',
+    legacy: (w) => w.backpack?.ethereum,
   },
 ];
 
@@ -384,12 +391,8 @@ function pickInjected(w: any, match: (p: any) => boolean): any {
   const many: any[] = w.ethereum?.providers ?? [];
   const inList = many.find(match);
   if (inList) return inList;
-  // A browser with no wallet extension has no `window.ethereum` at all, and
-  // every matcher here reads a flag straight off the provider. Without this
-  // guard that read throws, the render asking for the wallet list throws with
-  // it, and the whole page becomes the global error screen: the app looked
-  // dead to anyone who had not already installed a wallet, which is most of
-  // the people being shown it.
+  // A browser with no wallet extension has no `window.ethereum` at all: guard
+  // the read, or the chooser throws for everyone who has not installed one.
   return w.ethereum && match(w.ethereum) ? w.ethereum : undefined;
 }
 
@@ -398,11 +401,8 @@ interface Announced {
   provider: any;
 }
 
-/// EIP-6963 announcements, collected as they arrive.
-///
-/// A wallet only announces when asked, and asking once at module load misses
-/// any extension that finished injecting after this file ran. So the request
-/// goes out again whenever anyone reads the list.
+/// EIP-6963 announcements, collected as they arrive. A wallet only announces
+/// when asked, so the request goes out again whenever anyone reads the list.
 const discovered: Announced[] = [];
 if (typeof window !== 'undefined') {
   window.addEventListener('eip6963:announceProvider', (e) => {
@@ -423,15 +423,10 @@ export interface FoundWallet extends WalletKind {
 }
 
 /// Every wallet from the list that is actually installed.
-///
-/// Only the three we name. A browser with six extensions announced a list of
-/// six, most of which have no business on Monad, and the chooser stopped
-/// reading as a choice. These three are the ones we test against.
 export function availableWallets(): FoundWallet[] {
   if (typeof window === 'undefined') return [];
   const w = window as any;
   const out: FoundWallet[] = [];
-
   for (const kind of WALLETS) {
     const announced = discovered.find(
       (p) => kind.rdns.includes(p.info.rdns)
@@ -460,6 +455,11 @@ function remembered(): string | undefined {
   }
 }
 
+/// The passkey account, when the user signed in with one. Held here rather
+/// than in React state so `send` can sign without a provider.
+let passkeyAccount: LocalAccount | undefined;
+const listeners = new Set<(a: Address | undefined) => void>();
+
 /// The provider every call site uses: the one the user picked, or the only one
 /// installed, or nothing.
 function injectedProvider(): any {
@@ -469,23 +469,50 @@ function injectedProvider(): any {
 }
 
 export function useWallet() {
-  const [address, setAddress] = useState<Address | undefined>();
+  const [address, setAddress] = useState<Address | undefined>(passkeyAccount?.address);
+  const [kind, setKind] = useState<'passkey' | 'injected' | undefined>(passkeyAccount ? 'passkey' : undefined);
+
+  useEffect(() => {
+    const on = (a: Address | undefined) => { setAddress(a); setKind(a ? 'passkey' : undefined); };
+    listeners.add(on);
+    return () => { listeners.delete(on); };
+  }, []);
 
   const disconnect = useCallback(() => {
     setAddress(undefined);
+    setKind(undefined);
+    if (passkeyAccount) {
+      passkeyAccount = undefined;
+      signOutPasskey();
+      listeners.forEach((l) => l(undefined));
+      return;
+    }
     try {
       window.sessionStorage.setItem(LEFT, '1');
     } catch {
       /* private mode: the disconnect lasts the session anyway */
     }
-    // Not every wallet implements this, and none of them have to. Where it
-    // exists it makes the wallet forget the site too, which is what the user
-    // meant; where it does not, clearing our side is the whole of it.
+    // Where the wallet implements it, it forgets the site too.
     injectedProvider()?.request?.({ method: 'wallet_revokePermissions', params: [{ eth_accounts: {} }] })
       .catch(() => {});
   }, []);
 
+  /// `passkey` signs in with a passkey (a new one if this browser knows none),
+  /// `passkey-existing` asks for any saved passkey of this site; anything else
+  /// is a browser wallet id.
   const connect = useCallback(async (walletId?: string) => {
+    if (walletId === 'passkey' || walletId === 'passkey-existing') {
+      const account = await signInWithPasskey(walletId === 'passkey-existing');
+      passkeyAccount = account;
+      try {
+        window.sessionStorage.setItem(PICKED, 'passkey');
+        window.sessionStorage.removeItem(LEFT);
+      } catch {
+        /* ignore */
+      }
+      listeners.forEach((l) => l(account.address));
+      return;
+    }
     const found = availableWallets();
     if (found.length === 0) {
       window.open(WALLETS[0].download, '_blank');
@@ -499,14 +526,10 @@ export function useWallet() {
     }
     const eth = pick.provider;
 
-    // Switch first, then ask for the account. The other way round shows the
-    // connect dialog on whatever chain the wallet happens to be sitting on,
-    // which is how someone approves a connection to Monad while the wallet
-    // says Coston2.
+    // Switch first, then ask for the account: the other way round shows the
+    // connect dialog on whatever chain the wallet happens to be sitting on.
     await ensureMonad(eth);
     const [acc] = await eth.request({ method: 'eth_requestAccounts' });
-
-    // And if the wallet was locked a moment ago, it can switch now.
     const on = await eth.request({ method: 'eth_chainId' }).catch(() => undefined);
     if (on !== CHAIN_ID_HEX) await ensureMonad(eth);
 
@@ -516,9 +539,11 @@ export function useWallet() {
       /* ignore */
     }
     setAddress(acc as Address);
+    setKind('injected');
   }, []);
 
   useEffect(() => {
+    if (passkeyAccount || remembered() === 'passkey') return;
     const eth = injectedProvider();
     if (!eth) return;
     let left = false;
@@ -529,12 +554,12 @@ export function useWallet() {
     }
     if (!left) {
       eth.request({ method: 'eth_accounts' }).then((a: string[]) => {
-        if (a[0]) setAddress(a[0] as Address);
+        if (a[0]) { setAddress(a[0] as Address); setKind('injected'); }
       }).catch(() => {});
     }
 
     // The wallet can change the account or the chain without asking us.
-    const onAccounts = (a: string[]) => setAddress(a[0] as Address | undefined);
+    const onAccounts = (a: string[]) => { if (!passkeyAccount) setAddress(a[0] as Address | undefined); };
     const onChain = () => setAddress((prev) => prev); // re-render; the guard in send() does the rest
     eth.on?.('accountsChanged', onAccounts);
     eth.on?.('chainChanged', onChain);
@@ -544,21 +569,12 @@ export function useWallet() {
     };
   }, []);
 
-  return { address, connect, disconnect };
+  return { address, kind, connect, disconnect };
 }
 
-/// Send one transaction and wait for it, the way every other network page here
-/// does: the wallet client is built on demand so no provider has to be mounted.
-/// Put the wallet on Monad, adding the chain if it has never heard of it.
-///
-/// Shared by `connect` and by every write: a wallet that was on another chain
-/// when the user pressed a button is the normal case, not the exception, and a
-/// wallet that does not know chain 1952 (anything but OKX's, which ships it)
-/// answers 4902 and needs to be told what it is.
-///
-/// The RPCs handed over are the ones this app measured as working, fastest
-/// first. Giving a wallet only OKX's public endpoint is how Rabby ended up
-/// added to a chain it could not reach.
+/// Put the wallet on Monad Testnet, adding the chain if it has never heard of
+/// it. Shared by `connect` and by every write: a wallet that was on another
+/// chain when the user pressed a button is the normal case.
 export async function ensureMonad(eth: any): Promise<boolean> {
   try {
     const on = await eth.request({ method: 'eth_chainId' }).catch(() => undefined);
@@ -574,9 +590,9 @@ export async function ensureMonad(eth: any): Promise<boolean> {
         params: [{
           chainId: CHAIN_ID_HEX,
           chainName: 'Monad Testnet',
-          nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 },
+          nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 },
           rpcUrls: READ_RPCS,
-          blockExplorerUrls: [xLayerTestnet.blockExplorers.default.url],
+          blockExplorerUrls: [monadChain.blockExplorers.default.url],
         }],
       });
       return true;
@@ -606,17 +622,33 @@ export function errorText(e: unknown): string {
   return raw.split('\n')[0].slice(0, 140) || 'Something went wrong';
 }
 
+/// Send one transaction and wait for it.
+///
+/// Monad charges the gas LIMIT, not the gas used, so the limit is set here from
+/// an estimate plus a fifth rather than left to a wallet that may pad it far
+/// more. The estimate also runs the call first: a revert surfaces with its
+/// reason before anyone is asked to sign.
 export async function send(
   from: Address, to: Address, abi: readonly unknown[], functionName: string, args: readonly unknown[],
 ): Promise<`0x${string}`> {
-  const eth = injectedProvider();
-  // The wallet may have wandered off to another chain since connecting, or
-  // never have been on this one. Ask it over before signing, rather than
-  // letting viem refuse with a mismatch the user cannot act on.
-  if (!(await ensureMonad(eth))) throw new Error('Switch your wallet to Monad Testnet to continue');
-  const wallet = createWalletClient({ account: from, chain: xLayerTestnet, transport: custom(eth) });
-  const hash = await wallet.writeContract({ address: to, abi: abi as never, functionName, args: args as never });
-  await pub.waitForTransactionReceipt({ hash });
+  const call = { address: to, abi: abi as never, functionName, args: args as never };
+  const estimate = await pub.estimateContractGas({ ...call, account: from } as never);
+  const gas = (estimate * 12n) / 10n;
+  let hash: `0x${string}`;
+  if (passkeyAccount && passkeyAccount.address.toLowerCase() === from.toLowerCase()) {
+    const wallet = createWalletClient({
+      account: passkeyAccount, chain: monadChain, transport: fallback(READ_RPCS.map((u) => http(u))),
+    });
+    hash = await wallet.writeContract({ ...call, gas } as never);
+  } else {
+    const eth = injectedProvider();
+    // The wallet may have wandered off to another chain since connecting.
+    if (!(await ensureMonad(eth))) throw new Error('Switch your wallet to Monad Testnet to continue');
+    const wallet = createWalletClient({ account: from, chain: monadChain, transport: custom(eth) });
+    hash = await wallet.writeContract({ ...call, gas } as never);
+  }
+  const receipt = await pub.waitForTransactionReceipt({ hash });
+  if (receipt.status !== 'success') throw new Error('The transaction reverted on chain');
   return hash;
 }
 
@@ -663,5 +695,5 @@ export async function faucetAll(owner: Address, mints: { token: Address; amount:
 }
 
 export { erc20Abi };
-export const usdgDecimals = USDG_DECIMALS;
+export const usdcDecimals = USDC_DECIMALS;
 export const rayOne = RAY;

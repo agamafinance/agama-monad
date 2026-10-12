@@ -6,6 +6,7 @@ import AnimatedButton from './AnimatedButton';
 import {
   askWalletsToAnnounce, availableWallets, errorText, WALLETS, type FoundWallet,
 } from '@/lib/monad/useMonad';
+import { hasStoredPasskey } from '@/lib/monad/passkey';
 import { useMonadWallet } from '@/lib/monad/WalletProvider';
 
 // Same pill as the other networks: dark-green AnimatedButton, address shortened
@@ -19,13 +20,15 @@ const pillProps = {
   className: 'h-10 px-[17px] text-[14px] font-medium whitespace-nowrap',
 };
 
-const shorten = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
+const shorten = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 export function MonadConnectPill() {
   const { address, connect, disconnect } = useMonadWallet();
   const [open, setOpen] = useState(false);
   const [found, setFound] = useState<FoundWallet[]>([]);
   const [trouble, setTrouble] = useState('');
+  const [working, setWorking] = useState('');
+  const [known, setKnown] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
   // An announcement can land at any time, so the list is rebuilt on every one
@@ -33,6 +36,7 @@ export function MonadConnectPill() {
   // finished injecting late ended up offered as "Install".
   useEffect(() => {
     if (!open) return;
+    setKnown(hasStoredPasskey());
     const refresh = () => setFound(availableWallets());
     refresh();
     askWalletsToAnnounce();
@@ -52,7 +56,7 @@ export function MonadConnectPill() {
   if (address) {
     return (
       <AnimatedButton {...pillProps} onClick={disconnect}>
-        <span className="relative inline-block">
+        <span className="relative inline-block" title={`${address} (click to sign out)`} data-address={address}>
           <span className="invisible whitespace-nowrap">Connect Wallet</span>
           <span className="absolute inset-0 flex items-center justify-center whitespace-nowrap">
             {shorten(address)}
@@ -64,6 +68,7 @@ export function MonadConnectPill() {
 
   const pick = async (id: string) => {
     setTrouble('');
+    setWorking(id);
     try {
       await connect(id);
       setOpen(false);
@@ -71,6 +76,8 @@ export function MonadConnectPill() {
       // Whatever the wallet said. Closing the menu on a failure would leave
       // someone clicking a button that looks like it did nothing.
       setTrouble(errorText(e));
+    } finally {
+      setWorking('');
     }
   };
 
@@ -81,7 +88,33 @@ export function MonadConnectPill() {
       </AnimatedButton>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[232px] overflow-hidden rounded-2xl bg-[#fdfaf1] p-1.5 shadow-[0_1px_3px_rgba(20,50,35,0.10),0_16px_40px_rgba(20,50,35,0.22)]">
+        <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-[264px] overflow-hidden rounded-2xl bg-[#fdfaf1] p-1.5 shadow-[0_1px_3px_rgba(20,50,35,0.10),0_16px_40px_rgba(20,50,35,0.22)]">
+          {/* A passkey first: no extension, no seed phrase, an account made
+              from the device's own lock. Mera derives a plain address from
+              it, so the rest of the app cannot tell the difference. */}
+          <button
+            type="button"
+            onClick={() => pick('passkey')}
+            disabled={!!working}
+            className="flex w-full items-center gap-3 rounded-xl bg-[#254839] px-3 py-2.5 text-left text-[14px] font-medium text-[#fdf8ed] hover:bg-[#1F3D31] disabled:opacity-60"
+          >
+            <PasskeyMark />
+            <span className="flex flex-col">
+              <span>{working === 'passkey' ? 'Waiting for the passkey…' : known ? 'Sign in with your passkey' : 'Sign in with a passkey'}</span>
+              <span className="text-[11px] font-normal text-[#fdf8ed]/70">No extension, no seed phrase</span>
+            </span>
+          </button>
+          {!known && (
+            <button
+              type="button"
+              onClick={() => pick('passkey-existing')}
+              disabled={!!working}
+              className="w-full px-3 pb-1 pt-1.5 text-left text-[12px] text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+            >
+              I already have an Agama passkey
+            </button>
+          )}
+          <div className="mx-3 my-1.5 border-t border-[#254839]/10" />
           {found.map((w) => (
             <button
               key={w.id}
@@ -118,6 +151,19 @@ export function MonadConnectPill() {
         </div>
       )}
     </div>
+  );
+}
+
+function PasskeyMark() {
+  return (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#fdf8ed]/15">
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <circle cx="9" cy="8" r="4" />
+        <path d="M2 21c0-3.3 3.1-6 7-6 1.3 0 2.5.3 3.5.8" />
+        <circle cx="18" cy="14" r="2.5" />
+        <path d="M18 16.5V22l1.5-1.2M18 19.5h1.5" />
+      </svg>
+    </span>
   );
 }
 

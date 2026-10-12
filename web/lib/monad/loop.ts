@@ -32,46 +32,31 @@ const ONE = 10n ** 18n;
 const VENUE_SPREAD_BPS = 30n;
 const SLIPPAGE_BPS = 200n;
 
-/// A quote for one exact amount, from whichever venue this deployment has.
-///
-/// On Monad mainnet that is the OKX aggregator, signed server side by
-/// /api/zap; on testnet it is the oracle-priced stand-in router deployed with
-/// the stack. A loop needs one quote per hop, because an aggregator route is
-/// built for one exact input and cannot be reused at another size.
+/// A quote for one exact amount, from the venue this deployment has: the
+/// oracle-priced stand-in router deployed with the stack. A loop needs one
+/// quote per hop, because a route is built for one exact input.
 async function quote(m: Market, side: 'buy' | 'sell', amount: bigint): Promise<Hop> {
   const dex = ADDR.testDexRouter;
-  if (dex) {
-    const out = side === 'buy'
-      ? (amount * ONE) / m.wrapperPrice
-      : (amount * m.wrapperPrice) / ONE;
-    return {
-      amount,
-      swapTarget: dex,
-      swapSpender: dex,
-      swapData: encodeFunctionData({
-        abi: testDexAbi,
-        functionName: side === 'buy' ? 'swap' : 'sell',
-        args: [m.wrapper, amount, m.wrapperPrice],
-      }),
-      minOut: (out * (BPS - SLIPPAGE_BPS)) / BPS,
-    };
-  }
-
-  const res = await fetch('/api/zap', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ mode: 'swap', stock: m.stock.key, amount: amount.toString(), side }),
-  });
-  const j = await res.json();
-  if (!res.ok) throw new Error(j.error ?? 'aggregator error');
+  if (!dex) throw new Error('No swap venue in this deployment');
+  const out = side === 'buy'
+    ? (amount * ONE) / m.wrapperPrice
+    : (amount * m.wrapperPrice) / ONE;
   return {
-    amount, swapTarget: j.router, swapSpender: j.spender, swapData: j.data, minOut: BigInt(j.minReceive),
+    amount,
+    swapTarget: dex,
+    swapSpender: dex,
+    swapData: encodeFunctionData({
+      abi: testDexAbi,
+      functionName: side === 'buy' ? 'swap' : 'sell',
+      args: [m.wrapper, amount, m.wrapperPrice],
+    }),
+    minOut: (out * (BPS - SLIPPAGE_BPS)) / BPS,
   };
 }
 
 export interface OpenPlan {
   hops: Hop[];
-  /// USDG the loop will owe, and the stock it should end up holding.
+  /// USDC the loop will owe, and the stock it should end up holding.
   debt: bigint;
   shares: bigint;
   leverageBps: bigint;

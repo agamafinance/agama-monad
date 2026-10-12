@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatUnits, parseUnits } from 'viem';
 
 import { TokenIcon } from '@/components/icons/TokenIcon';
-import { ADDR, asset, BPS, RAY, STOCK_DECIMALS, USDG_DECIMALS } from '@/lib/monad/config';
+import { NotDeployed, PriceBadge } from '@/components/PriceBadge';
+import { ADDR, asset, BPS, DEPLOYED, RAY, STOCK_DECIMALS, USDC_DECIMALS } from '@/lib/monad/config';
 import { amplifyRouterAbi, lendingPoolAbi } from '@/lib/monad/generated/abis';
 import { planClose, planOpen } from '@/lib/monad/loop';
 import {
@@ -13,10 +14,10 @@ import {
 import { useMonadWallet } from '@/lib/monad/WalletProvider';
 
 const usd = (v: bigint | undefined) =>
-  v === undefined ? '—' : `$${Number(formatUnits(v, USDG_DECIMALS)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  v === undefined ? '-' : `$${Number(formatUnits(v, USDC_DECIMALS)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const qty = (v: bigint | undefined, dp = 2) =>
-  v === undefined ? '—' : Number(formatUnits(v, STOCK_DECIMALS)).toFixed(dp);
-const rayPct = (v: bigint | undefined) => (v === undefined ? '—' : `${(Number(v) / Number(RAY) * 100).toFixed(2)}%`);
+  v === undefined ? '-' : Number(formatUnits(v, STOCK_DECIMALS)).toFixed(dp);
+const rayPct = (v: bigint | undefined) => (v === undefined ? '-' : `${(Number(v) / Number(RAY) * 100).toFixed(2)}%`);
 const ONE = 10n ** 18n;
 
 export default function MonadAmplifyPage() {
@@ -39,6 +40,7 @@ export default function MonadAmplifyPage() {
   const [minBorrow, setMinBorrow] = useState(0n);
 
   useEffect(() => {
+    if (!DEPLOYED) return;
     pub.readContract({ address: ADDR.pool, abi: lendingPoolAbi, functionName: 'minBorrowAmount' })
       .then((v) => setMinBorrow(v as bigint)).catch(() => {});
   }, []);
@@ -142,21 +144,23 @@ export default function MonadAmplifyPage() {
             on one slider
           </h1>
           <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
-            Deposit a tokenized stock and the protocol borrows USDG against it, buys more of the same
+            Deposit a tokenized stock and the protocol borrows USDC against it, buys more of the same
             stock, and deposits that too, until the level you asked for. One transaction. How far it can
             go is the market&apos;s own LTV ceiling, not a number we chose.
           </p>
+          <PriceBadge markets={markets} />
 
           <div className="mt-7 flex flex-wrap gap-8">
-            <Stat label="Borrow APR" value={rayPct(proto?.borrowRate)} sub="USDG, variable" />
+            <Stat label="Borrow APR" value={rayPct(proto?.borrowRate)} sub="USDC, variable" />
             <Stat label="Max leverage" value={`${maxLeverage.toFixed(2)}x`} sub={m ? `${m.stock.base} at ${Number(m.maxLtv) / 100}% LTV` : ''} />
-            <Stat label="Your level" value={has ? `${openLeverage.toFixed(2)}x` : '—'} sub={has ? 'Held by the agents' : 'No loop open'} />
+            <Stat label="Your level" value={has ? `${openLeverage.toFixed(2)}x` : '-'} sub={has ? 'Held by the agents' : 'No loop open'} />
           </div>
         </div>
       </section>
 
       <section className="vault-panel relative z-10 rounded-t-[20px] px-6 md:px-24 pt-10 md:pt-14 pb-24">
         <div className="max-w-[1400px] mx-auto">
+          <div className="mb-5 empty:hidden"><NotDeployed /></div>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             {markets.map((mk) => (
               <button
@@ -188,7 +192,7 @@ export default function MonadAmplifyPage() {
             <div className="rounded-2xl bg-[#fdfaf1] p-6 shadow-[0_1px_3px_rgba(20,50,35,0.06),0_10px_30px_rgba(20,50,35,0.09)]">
               <h2 className="text-[17px] font-semibold text-fg">Loop {m?.stock.base ?? ''}</h2>
               <p className="mt-1 text-[13px] text-fg-muted">
-                The token an OKX withdrawal sends. Closing hands it back the same way.
+                The xStock itself. Closing hands it back the same way.
               </p>
 
               <div className="mt-4 rounded-2xl border border-[#254839]/12 bg-white/60 p-4">
@@ -229,9 +233,9 @@ export default function MonadAmplifyPage() {
               </div>
 
               <dl className="mt-4 space-y-2 text-[13px]">
-                <Row label="Stock you end up with" value={preview ? `${qty(preview.stock, 4)} ${m?.stock.base}` : '—'} />
-                <Row label="Exposure" value={preview ? usd(preview.exposure) : '—'} />
-                <Row label="Borrowed" value={preview ? usd(preview.borrowed) : '—'} />
+                <Row label="Stock you end up with" value={preview ? `${qty(preview.stock, 4)} ${m?.stock.base}` : '-'} />
+                <Row label="Exposure" value={preview ? usd(preview.exposure) : '-'} />
+                <Row label="Borrowed" value={preview ? usd(preview.borrowed) : '-'} />
               </dl>
 
               <button
@@ -257,7 +261,7 @@ export default function MonadAmplifyPage() {
               {!has ? (
                 <p className="mt-4 text-[14px] text-fg-muted">
                   No loop open on {m?.stock.base ?? 'this stock'}. Deposit some and pick a level: the stock
-                  the loop buys is the collateral for the USDG that bought it.
+                  the loop buys is the collateral for the USDC that bought it.
                 </p>
               ) : (
                 <>
