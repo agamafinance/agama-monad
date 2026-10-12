@@ -14,12 +14,13 @@ Jobs, every INTERVAL seconds:
   snapshot    the vault adapter's daily NAV snapshot
   protection  liquidate under HF 1, soft-deleverage under 1.15
   agents      hold each position on its target, buy stock with the yield
+  kuru        re-quote the Kuru books around the oracle (scripts/kuru_mm.py)
 
 Env:
   RPC_URL (default https://testnet-rpc.monad.xyz), DEPLOYMENT (deployments/10143.json),
   KEEPER_KEY (any funded key), DATASTREAMS_API_KEY and DATASTREAMS_API_SECRET
   (else .keys/datastreams.env), DS_HOST (default the testnet Data Engine),
-  INTERVAL (default 60), ONCE=1 for one tick, JOBS=prices,snapshot,protection,agents.
+  INTERVAL (default 60), ONCE=1 for one tick, JOBS=prices,kuru,snapshot,protection,agents.
 """
 import hashlib
 import hmac
@@ -302,6 +303,14 @@ def tick_agents(dep):
                 log(f"compound {acct[:10]} {ticker}: {str(e)[:90]}")
 
 
+def tick_kuru(dep):
+    """Keep depth on the Kuru books the swaps go through, at the oracle's mid."""
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    import kuru_mm  # noqa: E402
+
+    kuru_mm.tick()
+
+
 def tick_snapshot(dep):
     va = dep["adapters"]["VAULT"]
     last = first_int(call(va, "snapshotAt()(uint256)"))
@@ -344,9 +353,9 @@ STARTED = time.time()
 def main():
     dep = json.load(open(DEPLOYMENT))
     log("keeper on chain", dep["chainId"], "prices: Chainlink Data Streams, verified on chain")
-    jobs = {"prices": tick_prices, "protection": tick_protection, "agents": tick_agents,
+    jobs = {"prices": tick_prices, "kuru": tick_kuru, "protection": tick_protection, "agents": tick_agents,
             "snapshot": tick_snapshot}
-    selected = os.environ.get("JOBS", "prices,snapshot,protection,agents").split(",")
+    selected = os.environ.get("JOBS", "prices,kuru,snapshot,protection,agents").split(",")
     once = bool(os.environ.get("ONCE"))
     heavy = [j for j in selected if j not in PRICE_JOBS]
 

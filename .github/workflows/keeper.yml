@@ -2,7 +2,8 @@
 # 5h40: every minute it reads the latest signed Chainlink Data Streams reports
 # and sends the ones that moved 0.3%, changed session or reached 45 minutes to
 # the oracle, which has Chainlink's VerifierProxy check them; then the
-# permissionless agents on every position. Its first step queues the next job,
+# Kuru books re-quoted around the oracle, then the permissionless agents on
+# every position. Its first step queues the next job,
 # which waits in the concurrency group and starts when this one ends; the
 # hourly cron only restarts a broken chain. Secrets: KEEPER_KEY (a funded key,
 # no role in the protocol) and DATASTREAMS_API_KEY / DATASTREAMS_API_SECRET.
@@ -30,9 +31,19 @@ jobs:
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
+      # The market maker's resting order ids, so each job cancels the last
+      # one's quotes instead of stacking new ones on top.
+      - uses: actions/cache@v4
+        with:
+          path: .keys/kuru_mm.json
+          key: kuru-mm-${{ github.run_id }}
+          restore-keys: kuru-mm-
       - run: python3 scripts/keeper.py
         env:
           KEEPER_KEY: ${{ secrets.KEEPER_KEY }}
           DATASTREAMS_API_KEY: ${{ secrets.DATASTREAMS_API_KEY }}
           DATASTREAMS_API_SECRET: ${{ secrets.DATASTREAMS_API_SECRET }}
           RUN_MINUTES: "340"
+          # Re-quote the books when the mid moved 0.5% (or orders were taken):
+          # each re-quote is a transaction billed on its gas limit.
+          REQUOTE_BPS: "50"
