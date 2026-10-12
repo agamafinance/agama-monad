@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Check, Copy, ExternalLink } from 'lucide-react';
 
 import { TokenIcon } from '@/components/icons/TokenIcon';
 import { NotDeployed } from '@/components/PriceBadge';
+import { LOW_MON, Status, Step, usd, useMonBalance } from '@/components/monad/ui';
 import { formatUnits, parseUnits, type Address } from 'viem';
 
 import { asset, DEPLOYED, MON_FAUCET, STOCKS, TOKENS, USDC_DECIMALS } from '@/lib/monad/config';
@@ -21,15 +22,8 @@ export default function MonadFaucetPage() {
   const proto = useMonadProtocol(address, tick);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState('');
-  const [mon, setMon] = useState<bigint>();
-
-  useEffect(() => {
-    if (!address) { setMon(undefined); return; }
-    let alive = true;
-    pub.getBalance({ address }).then((b) => { if (alive) setMon(b); }).catch(() => {});
-    return () => { alive = false; };
-  }, [address, tick]);
+  const [status, setStatus] = useState<{ text: string; hash?: string }>();
+  const mon = useMonBalance(address, tick);
 
   const copyAddress = async () => {
     if (!address) return;
@@ -45,19 +39,19 @@ export default function MonadFaucetPage() {
   async function mintEverything() {
     if (!address) return;
     setBusy(true);
-    setNote('');
+    setStatus({ text: 'Minting...' });
     try {
       const bases = await Promise.all(STOCKS.map((s) => pub.readContract({
         address: TOKENS[s.wrapper], abi: erc20Abi, functionName: 'asset',
       }) as Promise<Address>));
-      await faucetAll(address, [
+      const hash = await faucetAll(address, [
         { token: TOKENS.USDC, amount: USDC_AMOUNT },
         ...bases.map((token) => ({ token, amount: STOCK_AMOUNT })),
       ]);
-      setNote('10,000 USDC and 10 of each stock, in one transaction');
+      setStatus({ text: 'Done. 10,000 USDC and 10 of each stock are in your wallet, in one transaction.', hash });
       bumpTick();
     } catch (e: unknown) {
-      setNote(errorText(e));
+      setStatus({ text: errorText(e) });
     } finally {
       setBusy(false);
     }
@@ -79,25 +73,24 @@ export default function MonadFaucetPage() {
 
           <h1 className="mt-3 text-[34px] md:text-[44px] leading-[1.05] text-fg font-semibold">Get testnet funds</h1>
           <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
-            Grab MON for gas, then take the stand-in USDC and xStocks in one transaction. These are
-            ours: same decimals, same ERC-4626 wrapper shape, priced off the real stocks by Chainlink
-            Data Streams, and the Arrow and Agama contracts they meet are the real ones.
+            Grab MON for gas, then take the stand-in USDC and the four xStocks in one transaction. Monad
+            Testnet carries none of them, so these are ours: same decimals, same ERC-4626 wrapper shape,
+            priced off the real stocks by Chainlink Data Streams, and the Arrow and Agama contracts they
+            meet are the real ones.
           </p>
 
           <div className="mt-7 flex flex-wrap gap-8">
             <Stat label="Network" value="Monad Testnet" sub="Chain 10143" />
+            <Stat label="Asset" value="xStocks" sub="TSLAx, NVDAx, SPYx, AAPLx" />
+            <Stat
+              label="USDC"
+              value={!address || usdc === undefined ? '-' : usd(usdc).replace('$', '')}
+              sub={address ? 'Stand-in USDC, in your wallet' : 'Stand-in USDC'}
+            />
             <Stat
               label="MON"
               value={!address || mon === undefined ? '-' : Number(formatUnits(mon, 18)).toFixed(3)}
               sub="For gas"
-            />
-            <Stat label="Asset" value="xStocks" sub="TSLAx, NVDAx, SPYx, AAPLx" />
-            <Stat
-              label="USDC"
-              value={!address || usdc === undefined
-                ? '-'
-                : Number(formatUnits(usdc, USDC_DECIMALS)).toFixed(2)}
-              sub={address ? 'Test USDC, in your wallet' : 'Test USDC'}
             />
           </div>
         </div>
@@ -131,6 +124,7 @@ export default function MonadFaucetPage() {
               onClick={address ? mintEverything : () => connect()}
               busy={busy}
               label={address ? 'Get the test tokens' : 'Connect a wallet'}
+              busyLabel={status?.text}
               disabled={busy || (!!address && !DEPLOYED)}
             />
           </StepRow>
@@ -140,6 +134,8 @@ export default function MonadFaucetPage() {
               <button type="button" onClick={() => connect()} className="underline hover:text-fg">
                 Connect a wallet
               </button>
+            ) : mon !== undefined && mon < LOW_MON ? (
+              `${Number(formatUnits(mon, 18)).toFixed(4)} MON here: paste your address into the MON faucet above first.`
             ) : (
               'Paste your address into the MON faucet above.'
             )}
@@ -152,8 +148,8 @@ export default function MonadFaucetPage() {
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? 'Copied!' : 'Copy address'}
             </button>
-            {note && <span className="ml-3">{note}</span>}
           </p>
+          {!busy && <Status text={status?.text} hash={status?.hash} />}
 
           <Link
             href="/monad"
@@ -186,16 +182,16 @@ function FaucetLink({ href, label }: { href: string; label: string }) {
 }
 
 function MintButton({
-  onClick, busy, label, disabled,
-}: { onClick: () => void; busy: boolean; label: string; disabled?: boolean }) {
+  onClick, busy, label, busyLabel, disabled,
+}: { onClick: () => void; busy: boolean; label: string; busyLabel?: string; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex h-11 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#254839] px-6 text-[14px] font-medium text-[#fdf8ed] hover:bg-[#1F3D31] disabled:opacity-45"
+      className="inline-flex h-11 w-[184px] items-center justify-center whitespace-nowrap rounded-full bg-[#254839] px-4 text-[14px] font-medium text-[#fdf8ed] hover:bg-[#1F3D31] disabled:opacity-45"
     >
-      {busy ? 'Minting…' : label}
+      {busy ? <Step text={busyLabel} /> : label}
     </button>
   );
 }
