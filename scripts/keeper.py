@@ -40,12 +40,15 @@ DS_HOST = os.environ.get("DS_HOST", "https://api.testnet-dataengine.chain.link")
 INTERVAL = int(os.environ.get("INTERVAL", "60"))
 # A verified push costs about 0.03 MON on Monad testnet: send one when a price
 # moved, the session changed, or the stored one is getting old, not every tick.
-MOVE_BPS = int(os.environ.get("MOVE_BPS", "30"))
-MAX_AGE = int(os.environ.get("MAX_AGE", "2700"))  # the oracle allows an hour
+MOVE_BPS = int(os.environ.get("MOVE_BPS", "50"))
+MAX_AGE = int(os.environ.get("MAX_AGE", "3000"))  # the oracle allows an hour
 RUN_MINUTES = float(os.environ.get("RUN_MINUTES", "0"))  # 0 = forever
 
 # Monad charges the gas limit, not the gas used: keep each one close to need.
-GAS_PRICE_PUSH = 1_500_000     # up to twelve reports, each verified by Chainlink
+GAS_PRICE_PUSH = 1_500_000     # snapshot() cap
+# A push measured on a fork: 87k gas for one report, 226k for four.
+GAS_PUSH_BASE = 80_000
+GAS_PUSH_PER_REPORT = 60_000
 GAS_AGENT = 3_000_000          # rebalance, compound (a swap through Kuru)
 GAS_PROTECTION = 6_000_000     # soft deleverage and liquidation walk positions
 DEFAULT_GAS = GAS_PROTECTION
@@ -203,8 +206,8 @@ def tick_prices(dep):
     if not reports:
         log("prices: nothing newer")
         return
-    send(oracle, "pushReports(bytes[])", "[" + ",".join(reports) + "]", gas=GAS_PRICE_PUSH,
-         estimate=False)
+    send(oracle, "pushReports(bytes[])", "[" + ",".join(reports) + "]",
+         gas=GAS_PUSH_BASE + GAS_PUSH_PER_REPORT * len(reports), estimate=False)
     log("prices verified on chain:", ", ".join(summary))
 
 
