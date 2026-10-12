@@ -3,6 +3,8 @@
 #
 #   ./scripts/check.sh
 #
+# scripts/prepush.sh runs this on a clean clone of HEAD.
+#
 # CI is the wrong place to find out that `forge fmt` had an opinion, and a red
 # run mails everyone. These are the same five steps as
 # .github/workflows/test.yml, so a green run here is a green run there.
