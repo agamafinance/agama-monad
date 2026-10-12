@@ -50,7 +50,8 @@ SIZE_PRECISION = 10**4
 USDC_FAUCET_CAP = 10_000 * 10**6
 STOCK_FAUCET_CAP = 100 * 10**18
 
-# Monad charges the gas limit, not the gas used.
+# Monad charges the gas limit, not the gas used: each send is estimated first
+# (a revert then costs nothing) and given its estimate plus a margin, capped.
 GAS_QUOTE = 4_000_000
 GAS_SMALL = 300_000
 
@@ -80,6 +81,8 @@ def call(to, sig, *args):
 def send(to, sig, *args, gas=GAS_SMALL):
     if not KEY:
         raise RuntimeError("MM_KEY (or KEEPER_KEY) not set")
+    est = first_int(cast("estimate", to, sig, *args, "--from", me(), "--rpc-url", RPC))
+    gas = min(gas, est * 13 // 10)
     for attempt in range(6):
         try:
             out = cast("send", to, sig, *args, "--private-key", KEY, "--gas-limit", str(gas),
@@ -99,8 +102,14 @@ def first_int(s):
     return int(s.split()[0])
 
 
+_me = None
+
+
 def me():
-    return cast("wallet", "address", "--private-key", KEY)
+    global _me
+    if _me is None:
+        _me = cast("wallet", "address", "--private-key", KEY)
+    return _me
 
 
 def load_state():
@@ -141,6 +150,13 @@ def live_orders(market, ids, owner):
         if lines[0].lower() == owner.lower() and first_int(lines[1]) > 0:
             alive.append(i)
     return alive
+
+
+def own_orders(market, owner):
+    """Every order of ours still resting, read off the book: a job that lost its
+    state must cancel the last quotes, or the new ones cross them (PostOnlyError)."""
+    last = first_int(call(market, "s_orderIdCounter()(uint40)"))
+    return live_orders(market, range(max(1, last - 200), last + 1), owner)
 
 
 def ensure_margin(margin, token, owner, need, faucet_cap):
@@ -210,7 +226,7 @@ def tick():
             mid6 = oracle_mid(oracle, ticker)
             if mid6 is None:
                 continue
-            s = state.get(market, {"mid": 0, "ids": []})
+            s = state.get(market) or {"mid": 0, "ids": own_orders(market, owner)}
             alive = live_orders(market, s["ids"], owner)
             moved = s["mid"] == 0 or abs(mid6 - s["mid"]) * 10_000 > REQUOTE_BPS * s["mid"]
             if not moved and len(alive) == len(s["ids"]) and alive:
