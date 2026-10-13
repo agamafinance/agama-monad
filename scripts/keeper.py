@@ -247,7 +247,10 @@ def tick_protection(dep):
     factory = dep["contracts"]["factory"]
     pool = dep["contracts"]["pool"]
     sp = dep["contracts"]["stabilityPool"]
+    # Retired markets too: a position opened before the terms were raised is
+    # still protected until it closes.
     stocks = [dep["adapters"][t] for t in MARKETS if t in dep["adapters"]]
+    stocks += list(dep.get("adaptersRetired", {}).values())
     for i, acct in accounts_from(factory, "protection"):
         if out_of_time("protection"):
             CURSOR["protection"] = i
