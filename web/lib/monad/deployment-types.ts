@@ -25,6 +25,8 @@ export type Deployment = {
     goldOracle?: Address;
   };
   adapters: Record<StockKey | "VAULT", Address>;
+  /// Markets replaced when the terms were raised, kept so old positions close.
+  adaptersRetired?: Partial<Record<StockKey, Address>>;
   tokens: {
     USDC: Address;
     wTSLAx: Address;
