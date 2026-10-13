@@ -104,12 +104,12 @@ export default function MonadJournalPage() {
     <>
       <section className="px-6 md:px-24 pt-10 md:pt-14 pb-8">
         <div className="max-w-[1400px] mx-auto">
-          <h1 className="mt-3 text-[34px] md:text-[44px] leading-[1.05] text-fg font-semibold">Private journal</h1>
+          <h1 className="mt-3 text-[34px] md:text-[44px] leading-[1.05] text-fg font-semibold">My P&amp;L</h1>
           <p className="mt-4 max-w-[680px] text-[15px] text-fg-muted">
-            Everything about a position is public on chain except what you paid and why. Write it here: your
-            passkey seals it through Mera, with a key of its own that is not the one your account signs with,
-            and the sealed copy is kept on Monad. Any device your passkey syncs to opens it; the chain, the
-            explorer and Agama only ever see ciphertext.
+            What you paid and why, readable only by you. Your position is public on chain; your entry price,
+            your size and your reasons are not. Your passkey seals them through Mera, with a key of its own that
+            is not the one your account signs with, and the sealed copy is kept on Monad. Any device your
+            passkey syncs to opens it; the chain, the explorer and Agama only ever see ciphertext.
           </p>
           <div className="mt-7 flex flex-wrap gap-8">
             <Stat label="Entries" value={journal ? String(entries.length) : vault ? 'Sealed' : '-'} />

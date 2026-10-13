@@ -124,7 +124,7 @@ One passkey, two PRF namespaces, two unrelated secrets
   derived from (BIP-39, then `m/44'/60'/0'/0/0`): no extension, no seed phrase,
   no custody backend.
 - **The journal**, which signs nothing. Everything about a position is public
-  on chain except what the holder paid and why. The Journal tab keeps that:
+  on chain except what the holder paid and why. The My P&L tab keeps that:
   entry price, quantity and note per stock, with the live P&L against the
   Chainlink price. Mera seals it as a secret vault under a fresh salt of its
   own (HKDF to AES-256-GCM), and the sealed vault is stored on Monad in
@@ -231,7 +231,7 @@ Metropolis:
 - the Chainlink CRE workflow as the protocol's keeper: prices for the ten
   markets, liquidations, soft deleverage, rebalancing, compounding through
   Kuru, its receiver and its lens;
-- Mera passkeys: the sign-in, and the private journal sealed by a second PRF
+- Mera passkeys: the sign-in, and the private P&L (My P&L tab) sealed by a second PRF
   namespace and kept on Monad as ciphertext;
 - a one-transaction faucet, the Monad front;
 - the Monad deployment, the keeper, the end-to-end run on a fork of it.
