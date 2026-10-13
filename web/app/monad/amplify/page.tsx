@@ -14,8 +14,8 @@ import {
 } from '@/lib/monad/useMonad';
 import { useMonadWallet } from '@/lib/monad/WalletProvider';
 import {
-  AgentsCard, AmountBox, card, GasNotice, Hero, MarketCards, Panel, parseAmount, pct, price, primaryBtn, qty, rayPct,
-  Row, secondaryBtn, SessionBadge, Stat, Status, Step, TestnetNote, usd, useMonBalance,
+  AgentsCard, AmountBox, card, Hero, MarketCards, Panel, parseAmount, pct, price, primaryBtn, qty, rayPct,
+  Row, secondaryBtn, SessionBadge, Stat, Status, Step, TestnetNote, usd,
 } from '@/components/monad/ui';
 
 /// What Kuru's book keeps around the oracle on a buy, as the loop planner
@@ -33,7 +33,6 @@ export default function MonadAmplifyPage() {
   const [tick, bumpTick] = useTick();
   const proto = useMonadProtocol(address, tick);
   const { markets, refresh } = useMonadMarkets(address);
-  const mon = useMonBalance(address, tick);
 
   const [sel, setSel] = useState(0);
   // Open on the stock asked for (?s=NVDA, from Portfolio).
@@ -160,7 +159,6 @@ export default function MonadAmplifyPage() {
 
       <Panel>
         <NotDeployed />
-        <GasNotice address={address} mon={mon} />
         <MarketCards markets={markets} sel={sel} onSelect={setSel} connected={!!address} />
         {markets.length > 0 && <PriceBadge markets={markets} />}
 

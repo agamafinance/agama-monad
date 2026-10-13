@@ -238,31 +238,6 @@ export function useMonBalance(address: Address | undefined, tick: number) {
 /// a loop through Kuru is a big one.
 export const LOW_MON = 10n ** 17n; // 0.1 MON
 
-/// A connected wallet with next to no MON, which is every new passkey: say so
-/// before the first transaction fails for it.
-export function GasNotice({ address, mon }: { address: Address | undefined; mon: bigint | undefined }) {
-  const [copied, setCopied] = useState(false);
-  if (!address || mon === undefined || mon >= LOW_MON) return null;
-  return (
-    <div className="rounded-2xl border border-[#c98a2b]/40 bg-[#c98a2b]/10 px-4 py-3 text-[13px] text-fg" data-testid="testnet-notice">
-      Agama runs on <b>Monad Testnet</b> and this wallet has little or no MON for gas. Get testnet MON at{' '}
-      <a href={MON_FAUCET} target="_blank" rel="noreferrer" className="underline">faucet.monad.xyz</a> for{' '}
-      <button
-        onClick={() => {
-          navigator.clipboard?.writeText(address);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        }}
-        className="underline"
-        title="Copy your address"
-      >
-        {address.slice(0, 6)}...{address.slice(-4)} ({copied ? 'copied' : 'copy'})
-      </button>
-      , then open the Faucet tab.
-    </div>
-  );
-}
-
 /// What is real on this testnet and what is a stand-in, under every page that
 /// trades.
 export function TestnetNote() {

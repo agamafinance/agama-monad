@@ -14,8 +14,8 @@ import { useMonadWallet } from '@/lib/monad/WalletProvider';
 import { NotDeployed, PriceBadge } from '@/components/PriceBadge';
 import { ago, useDepositBaseline, useLastAgentAction } from '@/lib/monad/agents';
 import {
-  AgentsCard, AmountBox, card, GasNotice, Hero, MarketCards, Panel, parseAmount, pct, price, primaryBtn, qty,
-  rayPct, Row, secondaryBtn, SessionBadge, Stat, Status, Step, TestnetNote, usd, useMonBalance,
+  AgentsCard, AmountBox, card, Hero, MarketCards, Panel, parseAmount, pct, price, primaryBtn, qty,
+  rayPct, Row, secondaryBtn, SessionBadge, Stat, Status, Step, TestnetNote, usd,
 } from '@/components/monad/ui';
 
 export default function MonadEarnPage() {
@@ -36,7 +36,6 @@ export default function MonadEarnPage() {
 
   const proto = useMonadProtocol(address, tick);
   const position = useMonadPosition(address, m?.adapter, m?.wrapper, tick);
-  const mon = useMonBalance(address, tick);
 
   const [amount, setAmount] = useState('');
   const [buying, setBuying] = useState(false);
@@ -176,7 +175,6 @@ export default function MonadEarnPage() {
 
       <Panel>
         <NotDeployed />
-        <GasNotice address={address} mon={mon} />
         <MarketCards markets={markets} sel={sel} onSelect={setSel} connected={!!address} />
         {markets.length > 0 && <PriceBadge markets={markets} />}
 
