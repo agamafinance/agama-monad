@@ -130,8 +130,10 @@ def main():
     print(f"Agama on Monad testnet, live check with a fresh wallet {user}")
 
     step("0. MON for gas")
-    tx = send(deployer, user, "", value=E18)
-    ok(num(cast("balance", user)) == E18, "1 MON from the deployer", tx)
+    # A gold loop borrows five figures in a few transactions, each billed on
+    # its gas limit: two MON covers the run, what is left goes back.
+    tx = send(deployer, user, "", value=2 * E18)
+    ok(num(cast("balance", user)) == 2 * E18, "2 MON from the deployer", tx)
 
     step("1. Faucet")
     tx = send(key, T["USDC"], "faucet(address,uint256)", user, str(5_000 * E6))
@@ -139,7 +141,7 @@ def main():
     tx = send(key, T["wTSLAx"], "faucet(address,uint256)", user, str(5 * E18))
     ok(bal(T["wTSLAx"], user) == 5 * E18, "5 wTSLAx, backed by the base TSLAx in the wrapper", tx)
     tx = send(key, T[wrapper(AMP)], "faucet(address,uint256)", user, str(10 * E18))
-    ok(bal(T[wrapper(AMP)], user) == 10 * E18, f"10 w{AMP}x", tx)
+    ok(bal(T[wrapper(AMP)], user) == 10 * E18, f"10 {wrapper(AMP)}", tx)
 
     step("2. Lend: supply USDC to the Arrow pool")
     send(key, T["USDC"], "approve(address,uint256)", C["pool"], str(1_000 * E6))
@@ -182,12 +184,12 @@ def main():
     tx = send(key, C["zapRouter"], "buyAndEarn(uint256,address,address,bytes,address,uint256,uint256)",
               str(spend), K["venue"], K["venue"], data, A[BUY], str(min_out), "2000")
     pos = earn_pos(user, A[BUY])
-    ok(pos["collateral"] >= min_out, f"bought {pos['collateral'] / E18:.4f} w{BUY}x on the book "
+    ok(pos["collateral"] >= min_out, f"bought {pos['collateral'] / E18:.4f} {wrapper(BUY)} on the book "
        f"(ask {int(before[2]) / E18:.2f}, oracle {pn / E6:.2f}) and borrowed {pos['debt'] / E6:.2f} USDC", tx)
     send(key, T["USDC"], "approve(address,uint256)", C["earnRouter"], str(10 * E6))
     tx = send(key, C["earnRouter"], "closeWithTopUp(address,uint256)", A[BUY], str(10 * E6))
     ok(earn_pos(user, A[BUY])["debt"] == 0 and bal(T[wrapper(BUY)], user) >= min_out,
-       f"closed, {bal(T[wrapper(BUY)], user) / E18:.4f} w{BUY}x in the wallet", tx)
+       f"closed, {bal(T[wrapper(BUY)], user) / E18:.4f} {wrapper(BUY)} in the wallet", tx)
 
     step(f"7. Amplify: 10 {AMP}x, borrow and buy more on Kuru")
     pa = price(A[AMP])
@@ -199,7 +201,7 @@ def main():
               f"[({borrow},{K['venue']},{K['venue']},{data},{min_out})]")
     pos = earn_pos(user, A[AMP])
     ok(pos["collateral"] >= 10 * E18 + min_out,
-       f"{pos['collateral'] / E18:.4f} w{AMP}x pledged, {pos['debt'] / E6:.2f} USDC owed, "
+       f"{pos['collateral'] / E18:.4f} {wrapper(AMP)} pledged, {pos['debt'] / E6:.2f} USDC owed, "
        f"exposure {pos['collateral'] / (10 * E18):.2f}x, health {pos['hf'] / 1e27:.2f}", tx)
 
     step("8. Amplify closed: sell on Kuru, repay, the stock back")
@@ -210,7 +212,7 @@ def main():
               f"[({sell},{K['venue']},{K['venue']},{data},{min_usdc})]", "false")
     left = bal(T[wrapper(AMP)], user)
     ok(earn_pos(user, A[AMP])["debt"] == 0 and left > 9 * E18,
-       f"no debt, {left / E18:.4f} w{AMP}x back (10 in, the spread and the interest paid)", tx)
+       f"no debt, {left / E18:.4f} {wrapper(AMP)} back (10 in, the spread and the interest paid)", tx)
 
     step("9. Lend withdrawn")
     before = bal(T["USDC"], user)
