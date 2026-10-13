@@ -234,9 +234,6 @@ export function useMonBalance(address: Address | undefined, tick: number) {
   return mon;
 }
 
-/// Below this a wallet cannot pay for much: Monad charges the gas limit, and
-/// a loop through Kuru is a big one.
-export const LOW_MON = 10n ** 17n; // 0.1 MON
 
 /// What is real on this testnet and what is a stand-in, under every page that
 /// trades.

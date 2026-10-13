@@ -6,7 +6,7 @@ import { ArrowRight, Check, Copy, ExternalLink } from 'lucide-react';
 
 import { TokenIcon } from '@/components/icons/TokenIcon';
 import { NotDeployed } from '@/components/PriceBadge';
-import { LOW_MON, Status, Step, usd, useMonBalance } from '@/components/monad/ui';
+import { Status, Step, usd, useMonBalance } from '@/components/monad/ui';
 import { formatUnits, parseUnits, type Address } from 'viem';
 
 import { asset, DEPLOYED, MON_FAUCET, STOCKS, TOKENS, USDC_DECIMALS } from '@/lib/monad/config';
@@ -106,7 +106,19 @@ export default function MonadFaucetPage() {
             title="MON for gas"
             blurb="Every Monad transaction is paid in MON, including from a passkey account, which is a plain address like any other. It is the one thing here nobody can mint for you."
           >
-            <FaucetLink href={MON_FAUCET} label="Open MON faucet" />
+            <div className="flex items-center gap-2">
+              {address && (
+                <button
+                  type="button"
+                  onClick={copyAddress}
+                  className="inline-flex h-11 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#254839]/[0.08] px-5 text-[14px] font-medium text-[#254839] hover:bg-[#254839]/[0.16]"
+                >
+                  {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? 'Copied!' : 'Copy address'}
+                </button>
+              )}
+              <FaucetLink href={MON_FAUCET} label="Open MON faucet" />
+            </div>
           </StepRow>
 
           <StepRow
@@ -129,26 +141,6 @@ export default function MonadFaucetPage() {
             />
           </StepRow>
 
-          <p className="pt-2 text-[12px] text-fg-muted">
-            {!address ? (
-              <button type="button" onClick={() => connect()} className="underline hover:text-fg">
-                Connect a wallet
-              </button>
-            ) : mon !== undefined && mon < LOW_MON ? (
-              `${Number(formatUnits(mon, 18)).toFixed(4)} MON here: paste your address into the MON faucet above first.`
-            ) : (
-              'Paste your address into the MON faucet above.'
-            )}
-            <button
-              type="button"
-              onClick={copyAddress}
-              disabled={!address}
-              className="ml-3 inline-flex items-center gap-1.5 rounded-full bg-[#254839]/[0.08] px-3 py-1 text-[12px] text-[#254839] hover:bg-[#254839]/[0.16] disabled:opacity-40"
-            >
-              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? 'Copied!' : 'Copy address'}
-            </button>
-          </p>
           {!busy && <Status text={status?.text} hash={status?.hash} />}
 
           <Link
