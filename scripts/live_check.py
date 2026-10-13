@@ -101,7 +101,7 @@ def ok(cond, msg, tx=None):
     global checks
     if not cond:
         print(f"   \033[31mFAIL\033[0m {msg}")
-        sys.exit(1)
+        raise SystemExit(1)
     checks += 1
     print(f"   ok  {msg}" + (f"\n       {EXPLORER}{tx}" if tx else ""), flush=True)
 
@@ -127,6 +127,20 @@ def main():
     w = json.loads(subprocess.run(["cast", "wallet", "new", "--json"], capture_output=True, text=True,
                                   check=True).stdout)[0]
     key, user = w["private_key"], w["address"]
+    # Kept until the MON is back, so a run that stops halfway can be swept.
+    with open(os.path.join(ROOT, ".keys", "live_check_wallets.txt"), "a") as f:
+        f.write(f"{user} {key}\n")
+    try:
+        run(deployer, key, user)
+    finally:
+        # What is left of the MON goes back, pass or fail, less a cent for the
+        # transfer's own gas limit, which Monad bills in full.
+        left = num(cast("balance", user)) - 10**16
+        if left > 0:
+            send(key, frm_deployer(deployer), "", value=left)
+
+
+def run(deployer, key, user):
     print(f"Agama on Monad testnet, live check with a fresh wallet {user}")
 
     step("0. MON for gas")
@@ -140,8 +154,9 @@ def main():
     ok(bal(T["USDC"], user) == 5_000 * E6, "5,000 USDC", tx)
     tx = send(key, T["wTSLAx"], "faucet(address,uint256)", user, str(5 * E18))
     ok(bal(T["wTSLAx"], user) == 5 * E18, "5 wTSLAx, backed by the base TSLAx in the wrapper", tx)
+    held = bal(T[wrapper(AMP)], user)
     tx = send(key, T[wrapper(AMP)], "faucet(address,uint256)", user, str(10 * E18))
-    ok(bal(T[wrapper(AMP)], user) == 10 * E18, f"10 {wrapper(AMP)}", tx)
+    ok(bal(T[wrapper(AMP)], user) == held + 10 * E18, f"10 {wrapper(AMP)}", tx)
 
     step("2. Lend: supply USDC to the Arrow pool")
     send(key, T["USDC"], "approve(address,uint256)", C["pool"], str(1_000 * E6))
@@ -151,6 +166,7 @@ def main():
 
     step("3. Earn: pledge 5 wTSLAx in the Arrow pool, borrow USDC into the vault")
     p = price(A["TSLA"])
+    before_earn = bal(T["wTSLAx"], user)
     send(key, T["wTSLAx"], "approve(address,uint256)", C["earnRouter"], str(5 * E18))
     tx = send(key, C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(5 * E18), "2000")
     pos = earn_pos(user, A["TSLA"])
@@ -170,7 +186,7 @@ def main():
     step("5. Earn closed")
     send(key, T["USDC"], "approve(address,uint256)", C["earnRouter"], str(10 * E6))
     tx = send(key, C["earnRouter"], "closeWithTopUp(address,uint256)", A["TSLA"], str(10 * E6))
-    ok(bal(T["wTSLAx"], user) == 5 * E18 and earn_pos(user, A["TSLA"])["debt"] == 0,
+    ok(bal(T["wTSLAx"], user) == before_earn and earn_pos(user, A["TSLA"])["debt"] == 0,
        "the 5 wTSLAx back, no debt left", tx)
 
     step(f"6. Buy and Earn: USDC buys {BUY}x on Kuru, the position opens in the same tx")
@@ -220,11 +236,6 @@ def main():
     got = bal(T["USDC"], user) - before
     ok(got >= 1_000 * E6 - 1, f"{got / E6:.6f} USDC back for 1,000 supplied", tx)
 
-    # What is left of the MON goes back, less a cent for the transfer's own
-    # gas limit, which Monad bills in full and holds against the balance.
-    left = num(cast("balance", user)) - 10**16
-    if left > 0:
-        send(key, frm_deployer(deployer), "", value=left)
     print(f"\n\033[1mLIVE CHECK PASSED\033[0m, {checks} checks, wallet {user}")
 
 
