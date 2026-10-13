@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { DEPLOYED } from '@/lib/monad/config';
+import { ADDR, DEPLOYED } from '@/lib/monad/config';
 import type { Market } from '@/lib/monad/useMonad';
 
 /// Where the prices come from, and how fresh the newest one is.
@@ -23,8 +23,17 @@ export function PriceBadge({ markets }: { markets: Market[] }) {
         </svg>
         Chainlink Data Streams
       </span>
+      <a
+        href={`https://testnet.monadvision.com/address/${ADDR.creReceiver}`}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center rounded-full bg-[#375BD2]/10 px-2.5 py-1 font-medium text-[#375BD2] hover:bg-[#375BD2]/20"
+      >
+        Chainlink CRE
+      </a>
       <span>
-        Every price is a signed Chainlink Data Streams report, verified on chain by Chainlink&apos;s Verifier. Last price {ageText}.
+        Every price is a signed Chainlink Data Streams report, brought by a Chainlink CRE workflow and verified on chain
+        by Chainlink&apos;s Verifier. Last price {ageText}.
       </span>
     </div>
   );

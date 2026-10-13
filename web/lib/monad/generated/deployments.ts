@@ -31,8 +31,10 @@ export const deployments: Partial<Record<number, Deployment>> = {
       "testDexRouter": "0x2206d75015C7fD9c67E7848b0a7Fc985AdbF0d24",
       "verifierProxy": "0x72790f9eB82db492a7DDb6d2af22A270Dcc3Db64",
       "zapRouter": "0xE362eC8747F39362464c485768EbFf0A235F6748",
-      "creReceiver": "0xec27460813bEB044DB01A1C1F28b91E69d8c95b8",
-      "goldOracle": "0x5C2C5F19A17B62055221bD8b80783E86b802e9Eb"
+      "creReceiver": "0x72f80190452B8a5fE19e639cEBAc476bD28D9E14",
+      "goldOracle": "0x5C2C5F19A17B62055221bD8b80783E86b802e9Eb",
+      "creReceiverV1": "0xec27460813bEB044DB01A1C1F28b91E69d8c95b8",
+      "creLens": "0xF8D5361FbcBAfaa03281Ec925d385eE7476Ad9B4"
     },
     "deployedAtBlock": 70438570,
     "keeper": "0x65688E3942295D9975953E4842Ffa6dc822A9F9B",

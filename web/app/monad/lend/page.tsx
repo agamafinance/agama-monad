@@ -169,6 +169,7 @@ export default function MonadLendPage() {
               <Row label="Collateral" value="Nine xStocks, XAUt0, vault shares" />
               <Row label="Price" value="Chainlink Data Streams, verified on chain by Chainlink's Verifier" />
               <Row label="Liquidation" value="Partial, absorbed by the stability pool" />
+              <Row label="Keeper" value="A Chainlink CRE workflow: prices, protection and the agents, every minute" />
               <Row label="Always open" value="Priced in every session Chainlink streams: regular, extended and overnight" />
             </dl>
             <p className="mt-4 rounded-2xl border border-[#254839]/12 bg-white/60 p-4 text-[13px] text-fg-muted">
