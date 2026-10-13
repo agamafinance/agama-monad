@@ -71,6 +71,10 @@ jobs:
           DATASTREAMS_API_SECRET: ${{ secrets.DATASTREAMS_API_SECRET }}
           CRE_API_KEY: ${{ secrets.CRE_API_KEY }}
           RUN_MINUTES: "340"
+          # The CRE workflow brings a price at 0.5% or 50 minutes; this job
+          # only steps in when it has not, before the oracle's hour runs out.
+          MOVE_BPS: "100"
+          MAX_AGE: "3300"
           # Re-quote the books when the mid moved 1% (or orders were taken):
           # a re-quote is about 2M gas on Kuru, billed on its limit.
           REQUOTE_BPS: "100"
