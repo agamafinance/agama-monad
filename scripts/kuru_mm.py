@@ -78,9 +78,18 @@ def call(to, sig, *args):
     return cast("call", to, sig, *args, "--rpc-url", RPC)
 
 
+# Mined reverts are billed in full on Monad. Three within ten minutes means
+# something is wrong that retrying will not fix: stop sending for half an hour
+# rather than pay for the same failure every minute.
+REVERTS = []
+
+
 def send(to, sig, *args, gas=GAS_SMALL):
     if not KEY:
         raise RuntimeError("MM_KEY (or KEEPER_KEY) not set")
+    if len(REVERTS) >= 3 and REVERTS[-1] - REVERTS[-3] < 600 \
+            and time.time() - REVERTS[-1] < 1800:
+        raise RuntimeError("paused: three mined reverts in ten minutes, nothing sent for half an hour")
     est = first_int(cast("estimate", to, sig, *args, "--from", me(), "--rpc-url", RPC))
     gas = min(gas, est * 13 // 10)
     for attempt in range(6):
@@ -89,6 +98,7 @@ def send(to, sig, *args, gas=GAS_SMALL):
                        "--json", "--rpc-url", RPC)
             receipt = json.loads(out)
             if receipt.get("status") not in ("0x1", 1, "1"):
+                REVERTS.append(time.time())
                 raise RuntimeError(f"reverted: {receipt.get('transactionHash')}")
             return receipt
         except RuntimeError as e:
