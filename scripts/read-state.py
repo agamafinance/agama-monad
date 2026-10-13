@@ -16,7 +16,7 @@ RPC = {"1952": "https://testrpc.xlayer.tech/terigon",
        "196": "https://rpc.xlayer.tech"}[CHAIN]
 D = json.load(open(os.path.join(ROOT, "deployments", f"{CHAIN}.json")))
 C, A, T = D["contracts"], D["adapters"], D["tokens"]
-TICKERS = ["TSLA", "NVDA", "SPY", "AAPL"]
+TICKERS = ["TSLA", "NVDA", "SPY", "AAPL", "QQQ", "GOOGL", "MSFT", "AMZN", "META"]
 
 
 def call(to, sig, *args):

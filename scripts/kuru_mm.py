@@ -37,7 +37,7 @@ LEVEL_USD = float(os.environ.get("LEVEL_USD", "5000"))
 REQUOTE_BPS = float(os.environ.get("REQUOTE_BPS", "10"))
 INTERVAL = int(os.environ.get("INTERVAL", "30"))
 
-TICKERS = ["TSLA", "NVDA", "SPY", "AAPL"]
+TICKERS = ["TSLA", "NVDA", "SPY", "AAPL", "QQQ", "GOOGL", "MSFT", "AMZN", "META"]
 # Distance of each level from the mid, in basis points: a tight top of book,
 # then depth further out for a loop's larger hops.
 LEVELS_BPS = [5, 15, 30, 60]

@@ -50,7 +50,7 @@ GAS_AGENT = 3_000_000          # rebalance, compound (a swap through Kuru)
 GAS_PROTECTION = 6_000_000     # soft deleverage and liquidation walk positions
 DEFAULT_GAS = GAS_PROTECTION
 
-TICKERS = ["TSLA", "NVDA", "SPY", "AAPL"]
+TICKERS = ["TSLA", "NVDA", "SPY", "AAPL", "QQQ", "GOOGL", "MSFT", "AMZN", "META"]
 STREAMS = json.load(open(os.path.join(ROOT, "scripts", "datastreams-feeds.json")))
 
 SOFT_TRIGGER = 115 * 10**25  # 1.15 RAY
