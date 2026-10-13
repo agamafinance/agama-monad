@@ -87,17 +87,28 @@ Amplify borrowed 10,495 USDC and bought XAUt0 on the book
 then sold it back to close
 ([`0x7ededb6f…9cd20`](https://testnet.monadvision.com/tx/0x7ededb6f5ec234a749c425fb30828dafbd90dd70a3d6920f4e930e010ce9cd20)).
 
-## Automation: a Chainlink CRE workflow
+## Automation: the whole keeper is a Chainlink CRE workflow
 
-`cre/agama-monad` is the protocol's keeper as a CRE workflow. Every minute the
-DON fetches the signed Data Streams reports, reads the oracle and every
-position on Monad, and writes one report through the Keystone Forwarder to
-[`AgamaCREReceiver`](https://testnet.monadvision.com/address/0xec27460813bEB044DB01A1C1F28b91E69d8c95b8),
-which has the oracle verify each price with Chainlink's VerifierProxy and runs
-the permissionless rebalance on positions off target. DON consensus on top of
-DON signatures; the receiver holds no role. Simulated with `--broadcast` on
-Monad testnet: [`0xfc11945c…2858`](https://testnet.monadvision.com/tx/0xfc11945c3afa72ab7298f08314934570bd1a98fd5c4a0a53b294518b59bc2858)
-carried four prices through the forwarder, the verifier and into the oracle.
+Everything Agama does on its own runs through `cre/agama-monad`, every minute:
+
+1. one chain read of [`AgamaKeeperLens`](https://testnet.monadvision.com/address/0xF8D5361FbcBAfaa03281Ec925d385eE7476Ad9B4):
+   what the stock and gold oracles hold, and the jobs due on every position
+   (liquidate, soft-deleverage, rebalance to the owner's LTV, compound the
+   yield into more stock on Kuru, the vault's daily snapshot);
+2. the signed Chainlink Data Streams reports of the nine stocks and gold,
+   fetched by each node and agreed on by the DON, kept only when the price
+   moved 0.5%, the session changed or the stored one is 50 minutes old;
+3. each job estimated from the receiver, so one that would revert never costs
+   gas;
+4. one report through the Keystone Forwarder to
+   [`AgamaCREReceiver`](https://testnet.monadvision.com/address/0x72f80190452B8a5fE19e639cEBAc476bD28D9E14),
+   which hands the prices to the oracles (Chainlink's VerifierProxy verifies
+   each on chain) and runs the jobs. DON consensus on top of DON signatures;
+   the receiver holds no role and no funds.
+
+The keeper on GitHub Actions runs it with `cre workflow simulate --broadcast`,
+so every price and every agent action on the live deployment arrives through
+the forwarder and the receiver. CRE_PROOF
 Details in [`cre/README.md`](cre/README.md).
 
 ## Architecture
@@ -124,6 +135,7 @@ flowchart TB
     KURU["Kuru order book<br/>stock / USDC markets"]
     ORACLE["DataStreamsStockOracle<br/>DataStreamsGoldOracle"]
     CL["Chainlink Data Streams<br/>VerifierProxy on Monad"]
+    CRE["Chainlink CRE workflow<br/>AgamaCREReceiver"]
     AGENTS["Agents<br/>anyone can run them"]
 
     USER --> app
@@ -136,7 +148,9 @@ flowchart TB
     AC -->|"buy / sell the stock"| KURU
     SP --> POOL
     AGENTS -->|"hold the level, buy stock with the yield"| AC
-    CL --> ORACLE --> XA
+    CL --> CRE
+    CRE -->|"verified prices"| ORACLE --> XA
+    CRE -->|"agent jobs"| AGENTS
 ```
 
 ## Where it lives
@@ -158,19 +172,20 @@ real Chainlink streams.
 ## Run it
 
 ```bash
-forge test                          # 86 tests, offline
-MONAD_FORK=1 forge test             # 101: plus real Chainlink reports (stocks and gold) and real Kuru markets on a Monad testnet fork
+forge test                          # 90 tests, offline
+MONAD_FORK=1 forge test             # 105: plus real Chainlink reports (stocks and gold) and real Kuru markets on a Monad testnet fork
 ./scripts/prepush.sh                # what CI runs, on a clean clone of HEAD
 anvil --fork-url https://testnet-rpc.monad.xyz &
 python3 scripts/e2e.py fork         # 18 steps, 41 checks on a fork of the live deployment
 python3 scripts/live_check.py       # the user path on Monad testnet itself: fresh wallet, real transactions (BUY=, AMP= pick the stocks)
-python3 scripts/keeper.py           # prices, protection, agents (KEEPER_KEY, Data Streams credentials)
+python3 scripts/keeper.py           # the CRE workflow every minute, then the Kuru quotes (KEEPER_KEY, Data Streams credentials, CRE login)
 cd web && pnpm dev                  # http://localhost:3004/monad
 ```
 
 The keeper runs on GitHub Actions (`.github/workflows/keeper.yml`), with a key
-that holds no role in the protocol: verified prices when they move, the Kuru
-quotes, the agents.
+that holds no role in the protocol: the CRE workflow (verified prices when they
+move, the agents), then the Kuru quotes. A tick where the CRE run fails does the
+same jobs from Python.
 
 ## Built during Metropolis, and before it
 
@@ -186,7 +201,9 @@ Metropolis:
 - ten markets: nine xStocks and Tether Gold, its oracle on the XAU/USD stream;
 - Kuru as the venue for every stock buy and sell: the ten books, the venue,
   the market maker;
-- the Chainlink CRE workflow and its receiver;
+- the Chainlink CRE workflow as the protocol's keeper: prices for the ten
+  markets, liquidations, soft deleverage, rebalancing, compounding through
+  Kuru, its receiver and its lens;
 - passkey sign-in with Mera, a one-transaction faucet, the Monad front;
 - the Monad deployment, the keeper, the end-to-end run on a fork of it.
 

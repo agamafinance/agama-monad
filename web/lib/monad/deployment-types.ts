@@ -20,7 +20,11 @@ export type Deployment = {
     testDexRouter?: Address;
     /// Chainlink Data Streams VerifierProxy the oracle verifies reports against.
     verifierProxy?: Address;
+    /// Where the Chainlink CRE workflow's reports land (prices and agent jobs).
     creReceiver?: Address;
+    creReceiverV1?: Address;
+    /// What the CRE workflow reads: the oracles and the jobs due, in one call.
+    creLens?: Address;
     /// Gold's own oracle: Chainlink's XAU/USD stream, schema v3.
     goldOracle?: Address;
   };
