@@ -46,6 +46,51 @@
         "extended": "0x000bbff670f86a195158a347cb04693bdc7d475ab43c645448c8835268b1d099",
         "overnight": "0x000bc10943a8c16f49ccec18764dfbed0c8d367503caf3a6e8af2087e79e81b7"
       }
+    },
+    {
+      "ticker": "QQQ",
+      "adapter": "0xE497aC95AE3C84A1BC57e71515702F3494129Be1",
+      "streams": {
+        "regular": "0x000bebb97e1da3eb1a71ac362a99255f944224355ef09067cd54f2fe2d0075f6",
+        "extended": "0x000b084fdb7383d198d9a793f5bda0d526a479722c3dd60166e0ebde078962d8",
+        "overnight": "0x000bb5ccf08dd3ad9e9a0f3c1794acbd0d1039601630c75fe3a0d19bdbe0bacb"
+      }
+    },
+    {
+      "ticker": "GOOGL",
+      "adapter": "0xf8BC1E89fDef0021c0C8403C5C9CB01DF58bbEFa",
+      "streams": {
+        "regular": "0x000b62925feea3a68e02358e2cdd0edade49ba782cd7ba605bd834cdfd5e04af",
+        "extended": "0x000b38cecfeca43e3b5cce05b2e25abebad62de192727e5d6fae47846ff90e0a",
+        "overnight": "0x000b27e8a01b15d1151b1dec1f33702d3d4966414b9b750bbb261f75a2c29bb4"
+      }
+    },
+    {
+      "ticker": "MSFT",
+      "adapter": "0x5379E7014bb9E4785B2598330Cd82379437e67C0",
+      "streams": {
+        "regular": "0x000b032fac53b731d7e9e8b0767151984f97ef151900a78be2fcc9713455ffc5",
+        "extended": "0x000b48add0681d9ca52424c1eccda5bcbf038eb85db3e67fe9b2931f1c2fd97a",
+        "overnight": "0x000bd230c2a3f549aad1288360bcd329e8b5591ae205b31595d009bb122dcf8e"
+      }
+    },
+    {
+      "ticker": "AMZN",
+      "adapter": "0x3f348157C34CA61E033B0b546a709582aF83a722",
+      "streams": {
+        "regular": "0x000babb1ff3f6920ebb15da8439f03f3b8669cc3f4c6b69594289e2e6af485ef",
+        "extended": "0x000b3a32200a6ca3e3c55a7de7ba690c86a071c58167f34778ab0cbf1d37fdc6",
+        "overnight": "0x000b042e894fb4404a2384854e4d678a85f943f2b83b25b2d837a426218dfcb3"
+      }
+    },
+    {
+      "ticker": "META",
+      "adapter": "0xA821aE95A44cb9d517b398968751d459fDA37c6D",
+      "streams": {
+        "regular": "0x000b7a8a64a03bee8c58f32e24bef3cad363bd33cf5384f485d301f0c8cf2fc0",
+        "extended": "0x000bb3991a740a35cafa5cdb2f9bd9372d575ec137a99543e943caa4a6b9c4bc",
+        "overnight": "0x000b2ef7c9d5369d8494a1000933a6815fd79dead95acb8ae07ce4f10127f926"
+      }
     }
   ]
 }
