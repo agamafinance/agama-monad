@@ -2,18 +2,18 @@
   "schedule": "0 * * * * *",
   "chainSelectorName": "monad-testnet",
   "dataStreamsUrl": "https://api.testnet-dataengine.chain.link",
-  "receiver": "0xec27460813bEB044DB01A1C1F28b91E69d8c95b8",
-  "oracle": "0xCd4186dF8b4A93A693Db4f9E6A80Ce7478131BC8",
-  "factory": "0x232f3aA85fCe4B11D0577E8527D880b952102Cd5",
-  "pool": "0x5d40EbE874DDA0cc78CC134e5378e013B65d2D7b",
-  "multicall": "0xcA11bde05977b3631167028862bE2a173976CA11",
+  "receiver": "0x72f80190452B8a5fE19e639cEBAc476bD28D9E14",
+  "lens": "0xF8D5361FbcBAfaa03281Ec925d385eE7476Ad9B4",
+  "stabilityPool": "0x0718a15d108F5b035485530Cf7AB518c6c99D3d9",
   "maxReportAge": 300,
-  "maxAccounts": 25,
-  "maxRebalances": 3,
+  "moveBps": 50,
+  "maxStoredAge": 3000,
+  "maxReports": 8,
+  "accountsPerRun": 25,
+  "maxJobs": 6,
   "markets": [
     {
       "ticker": "TSLA",
-      "adapter": "0xf67a82caA41FB8A78dAa05e2C8F0FD89121D46e0",
       "streams": {
         "regular": "0x000b08f5e1a8c355e9982cea5707cf7b60be8ef91c42bb8022fd63f1bd71f6ab",
         "extended": "0x000b4642144cb2e2f0e38ba57cc15a6549fd1522da1e7560f3d9e198b23fbe50",
@@ -22,7 +22,6 @@
     },
     {
       "ticker": "NVDA",
-      "adapter": "0xE2ec9F1462D99e9D8c159182f839490E7c7815C3",
       "streams": {
         "regular": "0x000b1d444945231e44dd47736c6abe288b10cb1b53941c7c68012fbdd2b1755c",
         "extended": "0x000bf689e4aa5c006c89c207eb155ae99184e433a518753eb745cc552391a743",
@@ -31,7 +30,6 @@
     },
     {
       "ticker": "SPY",
-      "adapter": "0xf18E83C5DC3FA99067796e4944c54E0B7a2d567B",
       "streams": {
         "regular": "0x000b220be6fe94b85d6d8e8d5d4d212f5b86a644cbcc1dbf28b9e77b6810a5ec",
         "extended": "0x000b5197360a398d3fa52c25c43f2be1f782bba7f576373548b8414117e3a039",
@@ -40,7 +38,6 @@
     },
     {
       "ticker": "AAPL",
-      "adapter": "0x061488361331d00926Df3d41ed2DC8523fb60802",
       "streams": {
         "regular": "0x000b61d6dec069be40efc5f21f0345142a827f42966a07fa4743773383a8dd7b",
         "extended": "0x000bbff670f86a195158a347cb04693bdc7d475ab43c645448c8835268b1d099",
@@ -49,7 +46,6 @@
     },
     {
       "ticker": "QQQ",
-      "adapter": "0x96c6D89B5c653654d1f257f88948B6463E20e703",
       "streams": {
         "regular": "0x000bebb97e1da3eb1a71ac362a99255f944224355ef09067cd54f2fe2d0075f6",
         "extended": "0x000b084fdb7383d198d9a793f5bda0d526a479722c3dd60166e0ebde078962d8",
@@ -58,7 +54,6 @@
     },
     {
       "ticker": "GOOGL",
-      "adapter": "0x9ead365290f957c3e9F064F886DDda7d14c841B2",
       "streams": {
         "regular": "0x000b62925feea3a68e02358e2cdd0edade49ba782cd7ba605bd834cdfd5e04af",
         "extended": "0x000b38cecfeca43e3b5cce05b2e25abebad62de192727e5d6fae47846ff90e0a",
@@ -67,7 +62,6 @@
     },
     {
       "ticker": "MSFT",
-      "adapter": "0x3FcC4871Eb1C125641E675832b568B9CFb9A6aDe",
       "streams": {
         "regular": "0x000b032fac53b731d7e9e8b0767151984f97ef151900a78be2fcc9713455ffc5",
         "extended": "0x000b48add0681d9ca52424c1eccda5bcbf038eb85db3e67fe9b2931f1c2fd97a",
@@ -76,7 +70,6 @@
     },
     {
       "ticker": "AMZN",
-      "adapter": "0xB044B5f8497DFb5933a938107Febb41Bde3e1cD3",
       "streams": {
         "regular": "0x000babb1ff3f6920ebb15da8439f03f3b8669cc3f4c6b69594289e2e6af485ef",
         "extended": "0x000b3a32200a6ca3e3c55a7de7ba690c86a071c58167f34778ab0cbf1d37fdc6",
@@ -85,11 +78,16 @@
     },
     {
       "ticker": "META",
-      "adapter": "0x9771d89d6096529867832EBd1dBB127b6ff5efA9",
       "streams": {
         "regular": "0x000b7a8a64a03bee8c58f32e24bef3cad363bd33cf5384f485d301f0c8cf2fc0",
         "extended": "0x000bb3991a740a35cafa5cdb2f9bd9372d575ec137a99543e943caa4a6b9c4bc",
         "overnight": "0x000b2ef7c9d5369d8494a1000933a6815fd79dead95acb8ae07ce4f10127f926"
+      }
+    },
+    {
+      "ticker": "XAUT",
+      "streams": {
+        "xau": "0x0003036191b204b5ba40ae93b6004917000f66d8527b64bad7f6b1d346ccdce9"
       }
     }
   ]
