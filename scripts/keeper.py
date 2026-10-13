@@ -51,6 +51,9 @@ GAS_PROTECTION = 6_000_000     # soft deleverage and liquidation walk positions
 DEFAULT_GAS = GAS_PROTECTION
 
 TICKERS = ["TSLA", "NVDA", "SPY", "AAPL", "QQQ", "GOOGL", "MSFT", "AMZN", "META"]
+# Tether Gold: its own oracle (contracts.goldOracle), fed by the XAU/USD stream.
+GOLD = "XAUT"
+MARKETS = TICKERS + [GOLD]
 STREAMS = json.load(open(os.path.join(ROOT, "scripts", "datastreams-feeds.json")))
 
 SOFT_TRIGGER = 115 * 10**25  # 1.15 RAY
@@ -160,33 +163,40 @@ def ds_get(path):
 
 
 def decode(full_hex):
-    """(feedId, observedAt, marketStatus, mid) from a v11 fullReport."""
+    """(feedId, observedAt, marketStatus, mid) from a v11 fullReport. A v3
+    report (XAU/USD) has no market status: gold trades around the clock, so
+    it reads as Regular (2)."""
     b = bytes.fromhex(full_hex[2:] if full_hex.startswith("0x") else full_hex)
     off = int.from_bytes(b[96:128], "big")
     n = int.from_bytes(b[off:off + 32], "big")
     blob = b[off + 32:off + 32 + n]
     word = lambda i: int.from_bytes(blob[32 * i:32 * i + 32], "big")
+    if blob[:2] == b"\x00\x03":
+        return "0x" + blob[:32].hex(), word(2), 2, word(6) / 1e18
     return "0x" + blob[:32].hex(), word(2), word(13), word(6) / 1e18
 
 
 def latest_reports():
-    ids = [sid for t in TICKERS for sid in STREAMS[t].values()]
+    ids = [sid for t in MARKETS for sid in STREAMS[t].values()]
     path = f"/api/v1/reports/bulk?feedIDs={','.join(ids)}&timestamp={int(time.time()) - 2}"
     return [r["fullReport"] for r in ds_get(path).get("reports", [])]
 
 
 # Which marketStatus each stream is believed for (mirrors script/Deployer.sol).
-SESSIONS = {"regular": (2, 5), "extended": (1, 3), "overnight": (4,)}
+SESSIONS = {"regular": (2, 5), "extended": (1, 3), "overnight": (4,), "xau": (2,)}
 
 
 def tick_prices(dep):
     """Every stream's latest report that is in its own session and newer than
-    what the oracle holds, in one transaction."""
-    oracle = dep["contracts"]["oracle"]
-    by_id = {sid.lower(): (t, kind) for t in TICKERS for kind, sid in STREAMS[t].items()}
+    what the oracle holds, in one transaction per oracle: the stocks', then
+    gold's."""
+    gold = dep["contracts"].get("goldOracle")
+    by_id = {sid.lower(): (t, kind) for t in (MARKETS if gold else TICKERS) for kind, sid in STREAMS[t].items()}
     fresh, seen = [], {}
     for full in latest_reports():
         feed, observed, status, mid = decode(full)
+        if feed.lower() not in by_id:
+            continue
         ticker, kind = by_id[feed.lower()]
         if status not in SESSIONS[kind]:
             continue
@@ -196,9 +206,15 @@ def tick_prices(dep):
     for r in fresh:
         if r[0] not in best or r[1] > best[r[0]][1]:
             best[r[0]] = r
+    for oracle, tickers in ((dep["contracts"]["oracle"], TICKERS), (gold, [GOLD])):
+        if oracle:
+            push_newer(oracle, [best[t] for t in tickers if t in best])
+
+
+def push_newer(oracle, best):
     reports, summary = [], []
     now = time.time()
-    for ticker, observed, status, mid, full in best.values():
+    for ticker, observed, status, mid, full in best:
         price, stored_at, was_open = stored(oracle, ticker)
         if observed <= stored_at:
             continue
@@ -207,7 +223,8 @@ def tick_prices(dep):
         if not (moved or session_changed or now - stored_at >= MAX_AGE):
             continue
         reports.append(full)
-        summary.append(f"{ticker} {mid:.2f} ({['?', 'pre', 'regular', 'post', 'overnight', 'closed'][status]})")
+        session = "24/7" if ticker == GOLD else ["?", "pre", "regular", "post", "overnight", "closed"][status]
+        summary.append(f"{ticker} {mid:.2f} ({session})")
     if not reports:
         log("prices: nothing newer")
         return
@@ -230,7 +247,7 @@ def tick_protection(dep):
     factory = dep["contracts"]["factory"]
     pool = dep["contracts"]["pool"]
     sp = dep["contracts"]["stabilityPool"]
-    stocks = [dep["adapters"][t] for t in TICKERS]
+    stocks = [dep["adapters"][t] for t in MARKETS if t in dep["adapters"]]
     for i, acct in accounts_from(factory, "protection"):
         if out_of_time("protection"):
             CURSOR["protection"] = i
@@ -285,8 +302,10 @@ def tick_agents(dep):
         if out_of_time("agents"):
             CURSOR["agents"] = i
             return
-        for ticker in TICKERS:
-            adapter = dep["adapters"][ticker]
+        for ticker in MARKETS:
+            adapter = dep["adapters"].get(ticker)
+            if not adapter:
+                continue
             target = first_int(call(acct, "targetLtvBps(address)(uint256)", adapter))
             if target == 0:  # the user never opened an Earn position on this stock
                 continue

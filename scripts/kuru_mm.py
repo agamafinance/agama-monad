@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quotes the four Agama stock markets on Kuru around the oracle price.
+"""Quotes the Agama markets on Kuru (nine xStocks and gold) around the oracle price.
 
 The books are new and nobody else trades test xStocks, so somebody has to
 give them depth or Amplify has nothing to buy from. This is that somebody:
@@ -37,7 +37,9 @@ LEVEL_USD = float(os.environ.get("LEVEL_USD", "5000"))
 REQUOTE_BPS = float(os.environ.get("REQUOTE_BPS", "10"))
 INTERVAL = int(os.environ.get("INTERVAL", "30"))
 
-TICKERS = ["TSLA", "NVDA", "SPY", "AAPL", "QQQ", "GOOGL", "MSFT", "AMZN", "META"]
+TICKERS = ["TSLA", "NVDA", "SPY", "AAPL", "QQQ", "GOOGL", "MSFT", "AMZN", "META", "XAUT"]
+# Gold has its own wrapper name and its own oracle (contracts.goldOracle).
+WRAPPER = {"XAUT": "wXAUt0"}
 # Distance of each level from the mid, in basis points: a tight top of book,
 # then depth further out for a loop's larger hops.
 LEVELS_BPS = [5, 15, 30, 60]
@@ -231,9 +233,11 @@ def tick():
     margin = kuru["marginAccount"]
     state = load_state()
     for ticker in TICKERS:
-        market = kuru[ticker]
+        market = kuru.get(ticker)
+        if not market:
+            continue
         try:
-            mid6 = oracle_mid(oracle, ticker)
+            mid6 = oracle_mid(d["contracts"]["goldOracle"] if ticker == "XAUT" else oracle, ticker)
             if mid6 is None:
                 continue
             s = state.get(market) or {"mid": 0, "ids": own_orders(market, owner)}
@@ -241,7 +245,7 @@ def tick():
             moved = s["mid"] == 0 or abs(mid6 - s["mid"]) * 10_000 > REQUOTE_BPS * s["mid"]
             if not moved and len(alive) == len(s["ids"]) and alive:
                 continue
-            base = call(d["tokens"][f"w{ticker}x"], "asset()(address)")
+            base = call(d["tokens"][WRAPPER.get(ticker, f"w{ticker}x")], "asset()(address)")
             ids = quote(ticker, market, base, usdc, margin, mid6, alive, owner)
             state[market] = {"mid": mid6, "ids": ids}
             save_state(state)

@@ -84,6 +84,10 @@ def send(key, to, sig, *args, value=None):
     return r["transactionHash"]
 
 
+def wrapper(ticker):
+    return "wXAUt0" if ticker == "XAUT" else f"w{ticker}x"
+
+
 def frm_deployer(key):
     return subprocess.run(["cast", "wallet", "address", "--private-key", key], capture_output=True,
                           text=True, check=True).stdout.strip()
@@ -134,8 +138,8 @@ def main():
     ok(bal(T["USDC"], user) == 5_000 * E6, "5,000 USDC", tx)
     tx = send(key, T["wTSLAx"], "faucet(address,uint256)", user, str(5 * E18))
     ok(bal(T["wTSLAx"], user) == 5 * E18, "5 wTSLAx, backed by the base TSLAx in the wrapper", tx)
-    tx = send(key, T[f"w{AMP}x"], "faucet(address,uint256)", user, str(10 * E18))
-    ok(bal(T[f"w{AMP}x"], user) == 10 * E18, f"10 w{AMP}x", tx)
+    tx = send(key, T[wrapper(AMP)], "faucet(address,uint256)", user, str(10 * E18))
+    ok(bal(T[wrapper(AMP)], user) == 10 * E18, f"10 w{AMP}x", tx)
 
     step("2. Lend: supply USDC to the Arrow pool")
     send(key, T["USDC"], "approve(address,uint256)", C["pool"], str(1_000 * E6))
@@ -171,7 +175,7 @@ def main():
     pn = price(A[BUY])
     spend = 300 * E6
     min_out = spend * E18 // pn * 97 // 100
-    data = calldata("buy(address,uint256,uint256)", T[f"w{BUY}x"], str(spend), str(min_out))
+    data = calldata("buy(address,uint256,uint256)", T[wrapper(BUY)], str(spend), str(min_out))
     book = K[BUY]
     before = call(book, "bestBidAsk()(uint256,uint256)").split()
     send(key, T["USDC"], "approve(address,uint256)", C["zapRouter"], str(spend))
@@ -182,15 +186,15 @@ def main():
        f"(ask {int(before[2]) / E18:.2f}, oracle {pn / E6:.2f}) and borrowed {pos['debt'] / E6:.2f} USDC", tx)
     send(key, T["USDC"], "approve(address,uint256)", C["earnRouter"], str(10 * E6))
     tx = send(key, C["earnRouter"], "closeWithTopUp(address,uint256)", A[BUY], str(10 * E6))
-    ok(earn_pos(user, A[BUY])["debt"] == 0 and bal(T[f"w{BUY}x"], user) >= min_out,
-       f"closed, {bal(T[f'w{BUY}x'], user) / E18:.4f} w{BUY}x in the wallet", tx)
+    ok(earn_pos(user, A[BUY])["debt"] == 0 and bal(T[wrapper(BUY)], user) >= min_out,
+       f"closed, {bal(T[wrapper(BUY)], user) / E18:.4f} w{BUY}x in the wallet", tx)
 
     step(f"7. Amplify: 10 {AMP}x, borrow and buy more on Kuru")
     pa = price(A[AMP])
     borrow = 10 * pa * 25 // 100
     min_out = borrow * E18 // pa * 97 // 100
-    data = calldata("buy(address,uint256,uint256)", T[f"w{AMP}x"], str(borrow), str(min_out))
-    send(key, T[f"w{AMP}x"], "approve(address,uint256)", C["amplifyRouter"], str(10 * E18))
+    data = calldata("buy(address,uint256,uint256)", T[wrapper(AMP)], str(borrow), str(min_out))
+    send(key, T[wrapper(AMP)], "approve(address,uint256)", C["amplifyRouter"], str(10 * E18))
     tx = send(key, C["amplifyRouter"], f"openStock(address,uint256,{HOP})", A[AMP], str(10 * E18),
               f"[({borrow},{K['venue']},{K['venue']},{data},{min_out})]")
     pos = earn_pos(user, A[AMP])
@@ -201,10 +205,10 @@ def main():
     step("8. Amplify closed: sell on Kuru, repay, the stock back")
     sell = pos["debt"] * 1015 // 1000 * E18 // pa
     min_usdc = sell * pa // E18 * 97 // 100
-    data = calldata("sell(address,uint256,uint256)", T[f"w{AMP}x"], str(sell), str(min_usdc))
+    data = calldata("sell(address,uint256,uint256)", T[wrapper(AMP)], str(sell), str(min_usdc))
     tx = send(key, C["amplifyRouter"], f"closeStock(address,{HOP},bool)", A[AMP],
               f"[({sell},{K['venue']},{K['venue']},{data},{min_usdc})]", "false")
-    left = bal(T[f"w{AMP}x"], user)
+    left = bal(T[wrapper(AMP)], user)
     ok(earn_pos(user, A[AMP])["debt"] == 0 and left > 9 * E18,
        f"no debt, {left / E18:.4f} w{AMP}x back (10 in, the spread and the interest paid)", tx)
 
