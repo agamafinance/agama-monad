@@ -45,10 +45,7 @@ MAX_AGE = int(os.environ.get("MAX_AGE", "3000"))  # the oracle allows an hour
 RUN_MINUTES = float(os.environ.get("RUN_MINUTES", "0"))  # 0 = forever
 
 # Monad charges the gas limit, not the gas used: keep each one close to need.
-GAS_PRICE_PUSH = 1_500_000     # snapshot() cap
-# A push measured on a fork: 87k gas for one report, 226k for four.
-GAS_PUSH_BASE = 80_000
-GAS_PUSH_PER_REPORT = 60_000
+GAS_PRICE_PUSH = 1_500_000     # up to twelve reports, each verified by Chainlink
 GAS_AGENT = 3_000_000          # rebalance, compound (a swap through Kuru)
 GAS_PROTECTION = 6_000_000     # soft deleverage and liquidation walk positions
 DEFAULT_GAS = GAS_PROTECTION
@@ -83,7 +80,13 @@ def call(to, sig, *args, rpc=RPC):
     return cast("call", to, sig, *args, rpc=rpc)
 
 
-def send(to, sig, *args, gas=DEFAULT_GAS, estimate=True):
+# Mined reverts are billed in full on Monad. Three within ten minutes means
+# something is wrong that retrying will not fix: stop sending for half an hour
+# rather than pay for the same failure every minute.
+REVERTS = []
+
+
+def send(to, sig, *args, gas=DEFAULT_GAS):
     """`sig` may be a signature plus args, or a full calldata hex blob.
 
     Always checks the receipt: a mined-but-reverted transaction must never be
@@ -91,19 +94,21 @@ def send(to, sig, *args, gas=DEFAULT_GAS, estimate=True):
     """
     if not KEY:
         raise RuntimeError("KEEPER_KEY not set")
-    # Estimated first: a revert costs nothing, and the limit billed is the
-    # estimate plus a margin, never more than the cap for this kind of call.
-    # Not for price pushes: a report observed after the last block would read
-    # as from the future there, though it is fine in the block it lands in.
-    if estimate:
-        est = first_int(cast("estimate", to, sig, *args, "--from", keeper_address()))
-        gas = min(gas, est * 13 // 10)
+    if len(REVERTS) >= 3 and REVERTS[-1] - REVERTS[-3] < 600 \
+            and time.time() - REVERTS[-1] < 1800:
+        raise RuntimeError("paused: three mined reverts in ten minutes, nothing sent for half an hour")
+    # Estimated first, price pushes included: a call that would revert costs
+    # nothing and is not sent, and the limit billed is the estimate plus a
+    # margin, never more than the cap for this kind of call.
+    est = first_int(cast("estimate", to, sig, *args, "--from", keeper_address()))
+    gas = min(gas, est * 13 // 10)
     for attempt in range(6):
         try:
             out = cast("send", to, sig, *args, "--private-key", KEY,
                        "--gas-limit", str(gas), "--json")
             receipt = json.loads(out)
             if receipt.get("status") not in ("0x1", 1, "1"):
+                REVERTS.append(time.time())
                 raise RuntimeError(f"reverted: {receipt.get('transactionHash')}")
             return out
         except RuntimeError as e:
@@ -206,8 +211,7 @@ def tick_prices(dep):
     if not reports:
         log("prices: nothing newer")
         return
-    send(oracle, "pushReports(bytes[])", "[" + ",".join(reports) + "]",
-         gas=GAS_PUSH_BASE + GAS_PUSH_PER_REPORT * len(reports), estimate=False)
+    send(oracle, "pushReports(bytes[])", "[" + ",".join(reports) + "]", gas=GAS_PRICE_PUSH)
     log("prices verified on chain:", ", ".join(summary))
 
 
