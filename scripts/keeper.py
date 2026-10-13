@@ -10,6 +10,12 @@ oracle believes each only for its own session, so the keeper sends the
 reports of all three and the ones out of their session are simply left out.
 
 Jobs, every INTERVAL seconds:
+  cre         the Chainlink CRE workflow (cre/agama-monad), run with
+              `cre workflow simulate --broadcast`: one DON report through the
+              Keystone Forwarder to AgamaCREReceiver carries the prices worth
+              storing and the jobs below (protection, agents, snapshot). The
+              default whenever the CRE CLI can authenticate (CRE_API_KEY or a
+              login); when a run fails, that tick falls back to the jobs below
   prices      the latest report of each stream, when newer than the stored one
   snapshot    the vault adapter's daily NAV snapshot
   protection  liquidate under HF 1, soft-deleverage under 1.15
@@ -20,7 +26,8 @@ Env:
   RPC_URL (default https://testnet-rpc.monad.xyz), DEPLOYMENT (deployments/10143.json),
   KEEPER_KEY (any funded key), DATASTREAMS_API_KEY and DATASTREAMS_API_SECRET
   (else .keys/datastreams.env), DS_HOST (default the testnet Data Engine),
-  INTERVAL (default 60), ONCE=1 for one tick, JOBS=prices,kuru,snapshot,protection,agents.
+  INTERVAL (default 60), ONCE=1 for one tick, JOBS=cre,kuru (or
+  prices,kuru,snapshot,protection,agents without CRE). CRE=0 turns CRE off.
 """
 import hashlib
 import hmac
@@ -351,6 +358,40 @@ def tick_agents(dep):
                 log(f"compound {acct[:10]} {ticker}: {str(e)[:90]}")
 
 
+CRE_DIR = os.path.join(ROOT, "cre")
+CRE_BIN = os.environ.get("CRE_BIN", "cre")
+CRE_WASM = os.path.join(ROOT, ".keys", "agama-monad.wasm")
+
+
+def cre_available():
+    if os.environ.get("CRE") == "0":
+        return False
+    try:
+        out = subprocess.run([CRE_BIN, "whoami"], cwd=CRE_DIR, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return out.returncode == 0
+
+
+def tick_cre(dep):
+    """One run of the CRE workflow, written on Monad through the forwarder.
+    The workflow is compiled once per keeper job, then each tick only runs it."""
+    if not os.path.exists(CRE_WASM):
+        subprocess.run([CRE_BIN, "workflow", "build", "./agama-monad", "-o", CRE_WASM],
+                       cwd=CRE_DIR, check=True, capture_output=True, text=True, timeout=300)
+    out = subprocess.run(
+        [CRE_BIN, "workflow", "simulate", "./agama-monad", "-T", "staging-settings", "--trigger-index", "0",
+         "--non-interactive", "--broadcast", "--wasm", CRE_WASM],
+        cwd=CRE_DIR, capture_output=True, text=True, timeout=180)
+    lines = (out.stdout + out.stderr).splitlines()
+    for line in lines:
+        if "[USER LOG]" in line:
+            log("cre:", line.split("[USER LOG]", 1)[1].strip())
+    failed = [l.strip() for l in lines if l.strip().startswith("✗")]
+    if out.returncode != 0 or failed:
+        raise RuntimeError((failed or lines[-1:] or ["no output"])[0][:200])
+
+
 def tick_kuru(dep):
     """Keep depth on the Kuru books the swaps go through, at the oracle's mid."""
     sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -367,7 +408,7 @@ def tick_snapshot(dep):
         log("vault CAPO snapshot")
 
 
-PRICE_JOBS = ("prices",)
+PRICE_JOBS = ("prices", "cre")
 # Seconds a tick may spend on anything other than a price push.
 HEAVY_BUDGET = int(os.environ.get("HEAVY_BUDGET", "150"))
 # Where the account walk stopped last time, so cutting it short still makes
@@ -402,8 +443,12 @@ def main():
     dep = json.load(open(DEPLOYMENT))
     log("keeper on chain", dep["chainId"], "prices: Chainlink Data Streams, verified on chain")
     jobs = {"prices": tick_prices, "kuru": tick_kuru, "protection": tick_protection, "agents": tick_agents,
-            "snapshot": tick_snapshot}
-    selected = os.environ.get("JOBS", "prices,kuru,snapshot,protection,agents").split(",")
+            "snapshot": tick_snapshot, "cre": tick_cre}
+    default = "prices,kuru,snapshot,protection,agents"
+    if "JOBS" not in os.environ and cre_available():
+        default = "cre,kuru"
+        log("prices, protection and agents run through the Chainlink CRE workflow")
+    selected = os.environ.get("JOBS", default).split(",")
     once = bool(os.environ.get("ONCE"))
     heavy = [j for j in selected if j not in PRICE_JOBS]
 
@@ -437,6 +482,14 @@ def main():
                 jobs[name](dep)
             except Exception as e:  # keep ticking
                 log(f"{name} failed: {e}")
+                if name == "cre":
+                    # The prices must not go stale because a CRE run did:
+                    # this tick does what the workflow would have.
+                    for fallback in ("prices", "protection"):
+                        try:
+                            jobs[fallback](dep)
+                        except Exception as e2:
+                            log(f"{fallback} failed: {e2}")
         if once:
             return
         if RUN_MINUTES and time.time() - STARTED > RUN_MINUTES * 60:

@@ -1,12 +1,18 @@
 # The always-on keeper for the testnet demo. Each job runs scripts/keeper.py for
-# 5h40: every minute it reads the latest signed Chainlink Data Streams reports
-# and sends the ones that moved 0.5%, changed session or reached 50 minutes to
-# the oracle, which has Chainlink's VerifierProxy check them; then the
-# Kuru books re-quoted around the oracle, then the permissionless agents on
-# every position. Its first step queues the next job,
+# 5h40: every minute it runs the Chainlink CRE workflow (cre/agama-monad) with
+# `cre workflow simulate --broadcast`. The workflow reads the latest signed
+# Data Streams reports and every position, and writes one DON report through
+# the Keystone Forwarder to AgamaCREReceiver: the prices that moved 0.5%,
+# changed session or reached 50 minutes (each verified on chain by Chainlink's
+# VerifierProxy), then the agents' jobs (liquidate, soft-deleverage,
+# rebalance, compound the yield into stock through Kuru, the daily snapshot).
+# Then the Kuru books are re-quoted around the oracle. Without CRE_API_KEY, or
+# on a tick where the CRE run fails, the same jobs run from Python. Its first
+# step queues the next job,
 # which waits in the concurrency group and starts when this one ends; the
 # hourly cron only restarts a broken chain. Secrets: KEEPER_KEY (a funded key,
-# no role in the protocol) and DATASTREAMS_API_KEY / DATASTREAMS_API_SECRET.
+# no role in the protocol), DATASTREAMS_API_KEY / DATASTREAMS_API_SECRET, and
+# CRE_API_KEY (the CRE CLI's, from app.chain.link).
 name: keeper
 on:
   schedule:
@@ -31,6 +37,25 @@ jobs:
         with:
           persist-credentials: false
       - uses: foundry-rs/foundry-toolchain@v1
+      - uses: oven-sh/setup-bun@v2
+      - name: CRE CLI and the workflow's dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEPER_KEY: ${{ secrets.KEEPER_KEY }}
+          DATASTREAMS_API_KEY: ${{ secrets.DATASTREAMS_API_KEY }}
+          DATASTREAMS_API_SECRET: ${{ secrets.DATASTREAMS_API_SECRET }}
+        run: |
+          gh release download v1.37.0 --repo smartcontractkit/cre-cli --pattern 'cre_linux_amd64.tar.gz' --dir /tmp/cre
+          tar -xzf /tmp/cre/cre_linux_amd64.tar.gz -C /tmp/cre
+          install -m 755 "$(find /tmp/cre -type f -name 'cre*' ! -name '*.tar.gz' | head -1)" /usr/local/bin/cre
+          (cd cre/agama-monad && bun install --frozen-lockfile)
+          # The key that pays for the write through the forwarder is the keeper's.
+          umask 077
+          {
+            echo "CRE_ETH_PRIVATE_KEY=${KEEPER_KEY#0x}"
+            echo "CRE_DS_KEY=$DATASTREAMS_API_KEY"
+            echo "CRE_DS_SECRET=$DATASTREAMS_API_SECRET"
+          } > cre/.env
       # The market maker's resting order ids, so each job cancels the last
       # one's quotes instead of stacking new ones on top. Saved even when the
       # job is cancelled; without it the script reads its orders off the book.
@@ -44,6 +69,7 @@ jobs:
           KEEPER_KEY: ${{ secrets.KEEPER_KEY }}
           DATASTREAMS_API_KEY: ${{ secrets.DATASTREAMS_API_KEY }}
           DATASTREAMS_API_SECRET: ${{ secrets.DATASTREAMS_API_SECRET }}
+          CRE_API_KEY: ${{ secrets.CRE_API_KEY }}
           RUN_MINUTES: "340"
           # Re-quote the books when the mid moved 1% (or orders were taken):
           # a re-quote is about 2M gas on Kuru, billed on its limit.
