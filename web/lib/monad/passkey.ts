@@ -37,32 +37,35 @@ function stored(): { credentialId: string; transports?: string[] } | undefined {
   }
 }
 
-export function hasStoredPasskey(): boolean {
-  return typeof window !== 'undefined' && !!stored();
-}
-
 function open(prfOutput: Uint8Array): LocalAccount {
   session?.end();
   session = createSecp256k1SigningSession({ privateKey: deriveEvmKey(prfOutput) });
   return toViemAccount(session);
 }
 
-/// The account behind the passkey this browser knows, or a new passkey when it
-/// knows none. `existing` asks the platform for any saved passkey of this site
-/// instead, which is how the same account is reached from another device.
-export async function signInWithPasskey(existing = false): Promise<LocalAccount> {
+/// One button for both cases: the passkey this browser already used, else any
+/// saved passkey of this site (another device's, synced), else a new one. A
+/// browser never tells a site whether a passkey exists, so "none" is the
+/// prompt coming back empty or closed, and a new passkey is made right after.
+export async function signInWithPasskey(): Promise<LocalAccount> {
+  const known = stored();
   try {
-    const known = stored();
-    if (known || existing) {
-      const { prfOutput, credentialId } = await getPasskeyPrfOutput({
-        rpId: window.location.hostname,
-        credential: known as never,
-      });
-      if (known?.credentialId !== credentialId) {
-        window.localStorage.setItem(STORED, JSON.stringify({ credentialId }));
-      }
-      return open(prfOutput);
+    const { prfOutput, credentialId } = await getPasskeyPrfOutput({
+      rpId: window.location.hostname,
+      credential: known as never,
+    });
+    if (known?.credentialId !== credentialId) {
+      window.localStorage.setItem(STORED, JSON.stringify({ credentialId }));
     }
+    return open(prfOutput);
+  } catch (e) {
+    // A passkey that exists but cannot derive an account is an answer, not an
+    // absence: making another one would hit the same wall.
+    if (known || (isMeraError(e) && e.code !== 'PASSKEY_OPERATION_FAILED')) {
+      throw new Error(passkeyErrorText(e));
+    }
+  }
+  try {
     const created = await createPasskeyWithPrfOutput({
       rp: { id: window.location.hostname, name: 'Agama' },
       user: { name: 'Agama on Monad', displayName: 'Agama on Monad' },

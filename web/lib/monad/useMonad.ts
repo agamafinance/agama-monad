@@ -497,12 +497,11 @@ export function useWallet() {
       .catch(() => {});
   }, []);
 
-  /// `passkey` signs in with a passkey (a new one if this browser knows none),
-  /// `passkey-existing` asks for any saved passkey of this site; anything else
-  /// is a browser wallet id.
+  /// `passkey` signs in with the user's passkey, or makes one when they have
+  /// none; anything else is a browser wallet id.
   const connect = useCallback(async (walletId?: string) => {
-    if (walletId === 'passkey' || walletId === 'passkey-existing') {
-      const account = await signInWithPasskey(walletId === 'passkey-existing');
+    if (walletId === 'passkey') {
+      const account = await signInWithPasskey();
       passkeyAccount = account;
       try {
         window.sessionStorage.setItem(PICKED, 'passkey');

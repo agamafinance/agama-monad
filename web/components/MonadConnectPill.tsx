@@ -6,7 +6,6 @@ import AnimatedButton from './AnimatedButton';
 import {
   askWalletsToAnnounce, availableWallets, errorText, WALLETS, type FoundWallet,
 } from '@/lib/monad/useMonad';
-import { hasStoredPasskey } from '@/lib/monad/passkey';
 import { useMonadWallet } from '@/lib/monad/WalletProvider';
 
 // Same pill as the other networks: dark-green AnimatedButton, address shortened
@@ -28,7 +27,6 @@ export function MonadConnectPill() {
   const [found, setFound] = useState<FoundWallet[]>([]);
   const [trouble, setTrouble] = useState('');
   const [working, setWorking] = useState('');
-  const [known, setKnown] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
   // An announcement can land at any time, so the list is rebuilt on every one
@@ -36,7 +34,6 @@ export function MonadConnectPill() {
   // finished injecting late ended up offered as "Install".
   useEffect(() => {
     if (!open) return;
-    setKnown(hasStoredPasskey());
     const refresh = () => setFound(availableWallets());
     refresh();
     askWalletsToAnnounce();
@@ -100,20 +97,10 @@ export function MonadConnectPill() {
           >
             <PasskeyMark />
             <span className="flex flex-col">
-              <span>{working === 'passkey' ? 'Waiting for the passkey…' : known ? 'Sign in with your passkey' : 'Sign in with a passkey'}</span>
-              <span className="text-[11px] font-normal text-[#fdf8ed]/70">No extension, no seed phrase</span>
+              <span>{working === 'passkey' ? 'Waiting for the passkey…' : 'Continue with a passkey'}</span>
+              <span className="text-[11px] font-normal text-[#fdf8ed]/70">Yours if you have one, a new one if not</span>
             </span>
           </button>
-          {!known && (
-            <button
-              type="button"
-              onClick={() => pick('passkey-existing')}
-              disabled={!!working}
-              className="w-full px-3 pb-1 pt-1.5 text-left text-[12px] text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-            >
-              I already have an Agama passkey
-            </button>
-          )}
           <div className="mx-3 my-1.5 border-t border-[#254839]/10" />
           {found.map((w) => (
             <button
