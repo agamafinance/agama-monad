@@ -28,7 +28,7 @@ function deriveEvmKey(prfOutput: Uint8Array): Uint8Array {
   return node.privateKey;
 }
 
-function stored(): { credentialId: string; transports?: string[] } | undefined {
+export function stored(): { credentialId: string; transports?: string[] } | undefined {
   try {
     const raw = window.localStorage.getItem(STORED);
     return raw ? JSON.parse(raw) : undefined;
@@ -80,7 +80,7 @@ async function immediateSupported(): Promise<boolean> {
   }
 }
 
-function remember(credentialId: string, transports?: readonly string[]) {
+export function remember(credentialId: string, transports?: readonly string[]) {
   window.localStorage.setItem(STORED, JSON.stringify({ credentialId, transports }));
 }
 

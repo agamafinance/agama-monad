@@ -27,6 +27,8 @@ export type Deployment = {
     creLens?: Address;
     /// Gold's own oracle: Chainlink's XAU/USD stream, schema v3.
     goldOracle?: Address;
+    /// Each wallet's journal, sealed by its passkey, stored as ciphertext.
+    journal?: Address;
   };
   adapters: Record<StockKey | "VAULT", Address>;
   /// Markets replaced when the terms were raised, kept so old positions close.

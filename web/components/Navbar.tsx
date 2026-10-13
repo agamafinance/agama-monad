@@ -11,6 +11,7 @@ const NAV: Record<Platform, { href: string; label: string }[]> = {
     { href: '/monad/portfolio', label: 'Portfolio' },
     { href: '/monad', label: 'Earn' },
     { href: '/monad/amplify', label: 'Amplify' },
+    { href: '/monad/journal', label: 'Journal' },
     { href: '/monad/faucet', label: 'Faucet' },
   ],
 };

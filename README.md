@@ -114,6 +114,30 @@ brought AMZN (extended session) and gold (XAU/USD) in one report, each verified
 by Chainlink's VerifierProxy into its own oracle.
 Details in [`cre/README.md`](cre/README.md).
 
+## Passkeys: Mera signs the account and seals the journal
+
+One passkey, two PRF namespaces, two unrelated secrets
+([`web/lib/monad/passkey.ts`](web/lib/monad/passkey.ts),
+[`web/lib/monad/journal.ts`](web/lib/monad/journal.ts)):
+
+- **The account.** Mera's default salt gives the PRF output an EVM key is
+  derived from (BIP-39, then `m/44'/60'/0'/0/0`): no extension, no seed phrase,
+  no custody backend.
+- **The journal**, which signs nothing. Everything about a position is public
+  on chain except what the holder paid and why. The Journal tab keeps that:
+  entry price, quantity and note per stock, with the live P&L against the
+  Chainlink price. Mera seals it as a secret vault under a fresh salt of its
+  own (HKDF to AES-256-GCM), and the sealed vault is stored on Monad in
+  [`AgamaJournal`](https://testnet.monadvision.com/address/0x144B1D77f7efF179c83B3e7c1832F82b3a84Cb45)
+  (`src/journal/AgamaJournal.sol`). Any device the passkey syncs to reads it
+  back and opens it with one prompt; the chain, the explorer and Agama only
+  see ciphertext. The account key cannot open the journal and the journal key
+  cannot sign. A browser-wallet user gets a passkey for the journal alone.
+
+First journal sealed on testnet:
+[`0x7b25de90…7792c`](https://testnet.monadvision.com/tx/0x7b25de904f4424808a2a1b2a277363b2611fc56368badb45e28e181363f7792c),
+686 bytes on chain, no plaintext in them.
+
 ## Architecture
 
 ```mermaid
@@ -175,8 +199,8 @@ real Chainlink streams.
 ## Run it
 
 ```bash
-forge test                          # 90 tests, offline
-MONAD_FORK=1 forge test             # 105: plus real Chainlink reports (stocks and gold) and real Kuru markets on a Monad testnet fork
+forge test                          # 94 tests, offline
+MONAD_FORK=1 forge test             # 109: plus real Chainlink reports (stocks and gold) and real Kuru markets on a Monad testnet fork
 ./scripts/prepush.sh                # what CI runs, on a clean clone of HEAD
 anvil --fork-url https://testnet-rpc.monad.xyz &
 python3 scripts/e2e.py fork         # 18 steps, 41 checks on a fork of the live deployment
@@ -207,7 +231,9 @@ Metropolis:
 - the Chainlink CRE workflow as the protocol's keeper: prices for the ten
   markets, liquidations, soft deleverage, rebalancing, compounding through
   Kuru, its receiver and its lens;
-- passkey sign-in with Mera, a one-transaction faucet, the Monad front;
+- Mera passkeys: the sign-in, and the private journal sealed by a second PRF
+  namespace and kept on Monad as ciphertext;
+- a one-transaction faucet, the Monad front;
 - the Monad deployment, the keeper, the end-to-end run on a fork of it.
 
 ## Known limits

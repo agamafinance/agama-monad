@@ -36,6 +36,7 @@ const ABIS = [
   ["agUsdQueueAbi", "agUSDQueue.sol", "agUSDQueue"],
   ["debtTokenAbi", "DebtToken.sol", "DebtToken"],
   ["zapRouterAbi", "AgamaZapRouter.sol", "AgamaZapRouter"],
+  ["journalAbi", "AgamaJournal.sol", "AgamaJournal"],
 ];
 
 // ---- ABIs ---------------------------------------------------------------------
