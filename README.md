@@ -9,7 +9,7 @@ a safe level, puts the USDC to work in the Agama private credit vault, and
 permissionless agents keep the level and turn the yield back into **more of the
 same stock**. What grows is your share count, not a stablecoin balance.
 
-- **Earn.** One deposit, nothing to set. The stock rises, the agents borrow the
+- **Earn.** One deposit and the level the agents hold. The stock rises, they borrow the
   difference; it falls, they repay from the yield already earned, never by
   selling your stock.
 - **Amplify.** Borrow against the stock, buy more of it, deposit that too. The
@@ -35,6 +35,12 @@ Chainlink Data Engine ──signed reports──▶ keeper (or anyone)
                      collateral adapters (LTV, threshold; tighter when the market is shut)
 ```
 
+Gold has its own oracle,
+[`DataStreamsGoldOracle`](https://testnet.monadvision.com/address/0x5C2C5F19A17B62055221bD8b80783E86b802e9Eb): Chainlink
+carries XAU/USD in its crypto schema (v3), with no market session, and one
+XAUt0 is one troy ounce. Same rules: verified by the VerifierProxy, under five
+minutes old, newer than the last.
+
 Chainlink publishes one stream per session (regular, extended, overnight). The
 oracle believes each only for its own: while the regular session trades, the
 overnight stream still publishes, at a different price (TSLA 383.77 against
@@ -50,7 +56,8 @@ minutes old is refused.
 ## Trading: Kuru's order book
 
 Every buy and sell of stock goes through Kuru, Monad's on-chain order book.
-Agama listed the four stocks against USDC (`script/KuruMarkets.s.sol`) and
+Agama listed the nine stocks and gold against USDC (`script/KuruMarkets.s.sol`,
+`script/AddMarkets.s.sol`, `script/AddGold.s.sol`) and
 routes through `KuruVenue`: the lending pool takes the ERC-4626 wrapper, the
 book trades the base xStock, the venue sits between them. Amplify's loop, Buy
 and Earn and the agents' compounding all fill on the book, and every fill is
@@ -64,10 +71,21 @@ Testnet has nobody else trading these stocks, so a small market maker
 | NVDAx / USDC | [`0xF9cda4A47cabA75b065A6AE56BaefE6C19934aEf`](https://testnet.monadvision.com/address/0xF9cda4A47cabA75b065A6AE56BaefE6C19934aEf) |
 | SPYx / USDC | [`0x01a1843f5a5b2964aaF9Ac7bC95A1C2527F0cD98`](https://testnet.monadvision.com/address/0x01a1843f5a5b2964aaF9Ac7bC95A1C2527F0cD98) |
 | AAPLx / USDC | [`0x3d06BD639f8b283B1635Eb543B86701cB93F2B91`](https://testnet.monadvision.com/address/0x3d06BD639f8b283B1635Eb543B86701cB93F2B91) |
+| QQQx / USDC | [`0x26EC7Ed35af8c914E077af28dAF3f9f06107E3e0`](https://testnet.monadvision.com/address/0x26EC7Ed35af8c914E077af28dAF3f9f06107E3e0) |
+| GOOGLx / USDC | [`0x2C6e24245D79bE1ef124a665Ce714cE035Eea5cA`](https://testnet.monadvision.com/address/0x2C6e24245D79bE1ef124a665Ce714cE035Eea5cA) |
+| MSFTx / USDC | [`0x0f3B0b1011d102B3a7eD6768fBcCebDa03825C03`](https://testnet.monadvision.com/address/0x0f3B0b1011d102B3a7eD6768fBcCebDa03825C03) |
+| AMZNx / USDC | [`0x1C439824BDf900bf900E3698a059fEF9B6e5F9dD`](https://testnet.monadvision.com/address/0x1C439824BDf900bf900E3698a059fEF9B6e5F9dD) |
+| METAx / USDC | [`0x66ff897EbA98e104C18677DF6802806e36EF9cfA`](https://testnet.monadvision.com/address/0x66ff897EbA98e104C18677DF6802806e36EF9cfA) |
+| XAUt0 / USDC | [`0x6BFa7BcD643C60530F22c7B976485e28B77CB7aE`](https://testnet.monadvision.com/address/0x6BFa7BcD643C60530F22c7B976485e28B77CB7aE) |
 | KuruVenue | [`0x61deAb234B260b7e2E6c143A3847A6978eCfD4FC`](https://testnet.monadvision.com/address/0x61deAb234B260b7e2E6c143A3847A6978eCfD4FC) |
 
 `test/KuruVenue.t.sol` creates a market through Kuru's own Router on a fork of
-Monad testnet and runs a whole Amplify open and close through it.
+Monad testnet and runs a whole Amplify open and close through it. On testnet
+itself, `scripts/live_check.py` runs the user path with a fresh wallet: a gold
+Amplify borrowed 10,495 USDC and bought XAUt0 on the book
+([`0x5290ed24…69deb`](https://testnet.monadvision.com/tx/0x5290ed2482a5e91d36adf6831d4bcacf20ed811d63351bc98b416904acab6deb)),
+then sold it back to close
+([`0x7ededb6f…9cd20`](https://testnet.monadvision.com/tx/0x7ededb6f5ec234a749c425fb30828dafbd90dd70a3d6920f4e930e010ce9cd20)).
 
 ## Automation: a Chainlink CRE workflow
 
@@ -100,11 +118,11 @@ flowchart TB
     end
     subgraph arrow["LENDING (Arrow Finance pool)"]
         POOL["ArrowLendingPool<br/>USDC, isolated debt per market"]
-        XA["ArrowXStockAdapter x4<br/>TSLAx / NVDAx / SPYx / AAPLx"]
+        XA["ArrowXStockAdapter x10<br/>nine xStocks and XAUt0"]
         SP["ArrowStabilityPool<br/>partial liquidation"]
     end
     KURU["Kuru order book<br/>stock / USDC markets"]
-    ORACLE["DataStreamsStockOracle"]
+    ORACLE["DataStreamsStockOracle<br/>DataStreamsGoldOracle"]
     CL["Chainlink Data Streams<br/>VerifierProxy on Monad"]
     AGENTS["Agents<br/>anyone can run them"]
 
@@ -126,7 +144,7 @@ flowchart TB
 | | |
 |---|---|
 | App | https://app.agama.finance/monad |
-| Test funds | Faucet tab: 10,000 USDC and 10 of each stock in one transaction. MON for gas at https://faucet.monad.xyz |
+| Test funds | Faucet tab: 10,000 USDC and 10 of each of the ten assets in one transaction. MON for gas at https://faucet.monad.xyz |
 | Contracts | every address in [`deployments/10143.json`](deployments/10143.json) |
 | Oracle | [`0xCd4186dF8b4A93A693Db4f9E6A80Ce7478131BC8`](https://testnet.monadvision.com/address/0xCd4186dF8b4A93A693Db4f9E6A80Ce7478131BC8) |
 | Lending pool | [`0x5d40EbE874DDA0cc78CC134e5378e013B65d2D7b`](https://testnet.monadvision.com/address/0x5d40EbE874DDA0cc78CC134e5378e013B65d2D7b) |
@@ -141,10 +159,11 @@ real Chainlink streams.
 
 ```bash
 forge test                          # 86 tests, offline
-MONAD_FORK=1 forge test             # 95: plus real Chainlink reports and real Kuru markets on a Monad testnet fork
+MONAD_FORK=1 forge test             # 101: plus real Chainlink reports (stocks and gold) and real Kuru markets on a Monad testnet fork
 ./scripts/prepush.sh                # what CI runs, on a clean clone of HEAD
 anvil --fork-url https://testnet-rpc.monad.xyz &
 python3 scripts/e2e.py fork         # 18 steps, 41 checks on a fork of the live deployment
+python3 scripts/live_check.py       # the user path on Monad testnet itself: fresh wallet, real transactions (BUY=, AMP= pick the stocks)
 python3 scripts/keeper.py           # prices, protection, agents (KEEPER_KEY, Data Streams credentials)
 cd web && pnpm dev                  # http://localhost:3004/monad
 ```
@@ -164,7 +183,8 @@ Metropolis:
 - the price layer for Monad: Chainlink Data Streams as the only source, one
   stream per session, five-minute reports, verified by Chainlink's VerifierProxy
   on Monad, with fork tests on real signed reports;
-- Kuru as the venue for every stock buy and sell: the four markets, the venue,
+- ten markets: nine xStocks and Tether Gold, its oracle on the XAU/USD stream;
+- Kuru as the venue for every stock buy and sell: the ten books, the venue,
   the market maker;
 - the Chainlink CRE workflow and its receiver;
 - passkey sign-in with Mera, a one-transaction faucet, the Monad front;
