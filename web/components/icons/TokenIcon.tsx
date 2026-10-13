@@ -24,6 +24,16 @@ const TOKENS: Record<string, TokenInfo> = {
   wNVDAx: { bg: '#76B900', fg: '#fff', symbol: 'N', logo: '/stocks/nvdax.png' },
   wSPYx: { bg: '#1B1BFF', fg: '#fff', symbol: 'S', logo: '/stocks/spyx.png' },
   wAAPLx: { bg: '#000000', fg: '#fff', symbol: 'A', logo: '/stocks/aaplx.svg' },
+  QQQx: { bg: '#0e7a5f', fg: '#fff', symbol: 'Q', logo: '/stocks/qqqx.png' },
+  GOOGLx: { bg: '#4285F4', fg: '#fff', symbol: 'G', logo: '/stocks/googlx.png' },
+  MSFTx: { bg: '#737373', fg: '#fff', symbol: 'M', logo: '/stocks/msftx.png' },
+  AMZNx: { bg: '#FF9900', fg: '#000', symbol: 'A', logo: '/stocks/amznx.png' },
+  METAx: { bg: '#0866FF', fg: '#fff', symbol: 'M', logo: '/stocks/metax.png' },
+  wQQQx: { bg: '#0e7a5f', fg: '#fff', symbol: 'Q', logo: '/stocks/qqqx.png' },
+  wGOOGLx: { bg: '#4285F4', fg: '#fff', symbol: 'G', logo: '/stocks/googlx.png' },
+  wMSFTx: { bg: '#737373', fg: '#fff', symbol: 'M', logo: '/stocks/msftx.png' },
+  wAMZNx: { bg: '#FF9900', fg: '#000', symbol: 'A', logo: '/stocks/amznx.png' },
+  wMETAx: { bg: '#0866FF', fg: '#fff', symbol: 'M', logo: '/stocks/metax.png' },
 };
 
 const FALLBACK = { bg: '#3B4256', fg: '#FFFFFF', symbol: '?' };

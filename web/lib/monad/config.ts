@@ -41,12 +41,12 @@ const zeroed = <T extends object>(o: T | undefined, keys: string[]): T =>
 export const ADDR = zeroed(D?.contracts, [
   'oracle', 'agUSD', 'sagUSD', 'queue', 'pool', 'stabilityPool', 'factory', 'earnRouter', 'amplifyRouter',
 ]) as Deployment['contracts'];
-export const TOKENS = zeroed(D?.tokens, ['USDC', 'wTSLAx', 'wNVDAx', 'wSPYx', 'wAAPLx']) as Deployment['tokens'];
+export const TOKENS = zeroed(D?.tokens, ['USDC', 'wTSLAx', 'wNVDAx', 'wSPYx', 'wAAPLx', 'wQQQx', 'wGOOGLx', 'wMSFTx', 'wAMZNx', 'wMETAx']) as Deployment['tokens'];
 /// Where stock is bought and sold: Kuru's order book through our venue when the
 /// deployment has it, else the stand-in router priced at the oracle.
 export const KURU_VENUE = D?.kuru?.venue;
 export const KURU_BOOKS = D?.kuru;
-export const ADAPTERS = zeroed(D?.adapters, ['TSLA', 'NVDA', 'SPY', 'AAPL', 'VAULT']) as Deployment['adapters'];
+export const ADAPTERS = zeroed(D?.adapters, ['TSLA', 'NVDA', 'SPY', 'AAPL', 'QQQ', 'GOOGL', 'MSFT', 'AMZN', 'META', 'VAULT']) as Deployment['adapters'];
 
 export const EXPLORER = monadChain.blockExplorers.default.url;
 export const txUrl = (hash: string) => `${EXPLORER}/tx/${hash}`;
@@ -65,15 +65,15 @@ export const RAY = 10n ** 27n;
 /// The vault keeps 18 decimals over a 6-decimal USDC, so its assets are agUSD.
 export const AG_PER_USDC = 10n ** 12n;
 
-export type StockKey = 'TSLA' | 'NVDA' | 'SPY' | 'AAPL';
+export type StockKey = 'TSLA' | 'NVDA' | 'SPY' | 'AAPL' | 'QQQ' | 'GOOGL' | 'MSFT' | 'AMZN' | 'META';
 
 export interface Stock {
   key: StockKey;
   /// The ERC-4626 wrapper the lending markets take. An implementation detail:
   /// the app speaks the base token, the one people hold and trade.
-  wrapper: 'wTSLAx' | 'wNVDAx' | 'wSPYx' | 'wAAPLx';
+  wrapper: `w${StockKey}x`;
   /// The xStock itself, and the only name shown.
-  base: 'TSLAx' | 'NVDAx' | 'SPYx' | 'AAPLx';
+  base: `${StockKey}x`;
   name: string;
   ticker: `0x${string}`; // bytes32, right padded
 }
@@ -83,6 +83,11 @@ export const STOCKS: Stock[] = [
   { key: 'NVDA', wrapper: 'wNVDAx', base: 'NVDAx', name: 'NVIDIA', ticker: stringToHex('NVDA', { size: 32 }) },
   { key: 'SPY', wrapper: 'wSPYx', base: 'SPYx', name: 'S&P 500 ETF', ticker: stringToHex('SPY', { size: 32 }) },
   { key: 'AAPL', wrapper: 'wAAPLx', base: 'AAPLx', name: 'Apple', ticker: stringToHex('AAPL', { size: 32 }) },
+  { key: 'QQQ', wrapper: 'wQQQx', base: 'QQQx', name: 'Nasdaq 100 ETF', ticker: stringToHex('QQQ', { size: 32 }) },
+  { key: 'GOOGL', wrapper: 'wGOOGLx', base: 'GOOGLx', name: 'Alphabet', ticker: stringToHex('GOOGL', { size: 32 }) },
+  { key: 'MSFT', wrapper: 'wMSFTx', base: 'MSFTx', name: 'Microsoft', ticker: stringToHex('MSFT', { size: 32 }) },
+  { key: 'AMZN', wrapper: 'wAMZNx', base: 'AMZNx', name: 'Amazon', ticker: stringToHex('AMZN', { size: 32 }) },
+  { key: 'META', wrapper: 'wMETAx', base: 'METAx', name: 'Meta', ticker: stringToHex('META', { size: 32 }) },
 ];
 
 /// Shown until the vault has two NAV snapshots to measure a realized APY from.

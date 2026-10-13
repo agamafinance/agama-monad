@@ -106,7 +106,7 @@ export function MarketCards({
   markets, sel, onSelect, connected,
 }: { markets: Market[]; sel: number; onSelect: (i: number) => void; connected: boolean }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       {markets.map((m, i) => (
         <button
           key={m.stock.key}
@@ -268,8 +268,8 @@ export function GasNotice({ address, mon }: { address: Address | undefined; mon:
 export function TestnetNote() {
   return (
     <p className="text-[12px] text-fg-muted">
-      Testnet: the stocks and USDC are stand-ins from the Faucet tab, under the real xStocks&apos; tickers (TSLAx,
-      NVDAx, SPYx and AAPLx, as on Monad mainnet); no xStock faucet exists on testnet. Prices are real: Chainlink
+      Testnet: the stocks and USDC are stand-ins from the Faucet tab, under the real xStocks&apos; names and
+      tickers, as on Monad mainnet; no xStock faucet exists on testnet. Prices are real: Chainlink
       Data Streams reports, verified on chain by Chainlink&apos;s Verifier. Trades fill on Kuru&apos;s order book.
     </p>
   );

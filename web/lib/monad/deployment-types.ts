@@ -1,6 +1,6 @@
 import type {Address} from "viem";
 
-export type StockKey = "TSLA" | "NVDA" | "SPY" | "AAPL";
+export type StockKey = "TSLA" | "NVDA" | "SPY" | "AAPL" | "QQQ" | "GOOGL" | "MSFT" | "AMZN" | "META";
 
 export type Deployment = {
   chainId: number;
@@ -29,6 +29,11 @@ export type Deployment = {
     wNVDAx: Address;
     wSPYx: Address;
     wAAPLx: Address;
+    wQQQx: Address;
+    wGOOGLx: Address;
+    wMSFTx: Address;
+    wAMZNx: Address;
+    wMETAx: Address;
   };
   /// Kuru: the venue every swap goes through, and the order book per stock
   /// (base xStock / USDC), when deployed.

@@ -25,7 +25,7 @@ export const pub = createPublicClient({
     rank: { interval: 30_000, sampleCount: 3 },
   }),
   // Every market read goes out as part of one Multicall3 call instead of on
-  // its own. Four markets is about thirty reads a refresh, which a public RPC
+  // its own. Nine markets is about seventy reads a refresh, which a public RPC
   // answers unevenly.
   batch: { multicall: { wait: 16 } },
 });

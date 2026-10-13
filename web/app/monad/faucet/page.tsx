@@ -73,7 +73,7 @@ export default function MonadFaucetPage() {
 
           <h1 className="mt-3 text-[34px] md:text-[44px] leading-[1.05] text-fg font-semibold">Get testnet funds</h1>
           <p className="mt-4 max-w-[640px] text-[15px] text-fg-muted">
-            Grab MON for gas, then take the stand-in USDC and the four xStocks in one transaction. Monad
+            Grab MON for gas, then take the stand-in USDC and the nine xStocks in one transaction. Monad
             Testnet carries none of them, so these are ours: same decimals, same ERC-4626 wrapper shape,
             priced off the real stocks by Chainlink Data Streams, and the Arrow and Agama contracts they
             meet are the real ones.
@@ -81,7 +81,7 @@ export default function MonadFaucetPage() {
 
           <div className="mt-7 flex flex-wrap gap-8">
             <Stat label="Network" value="Monad Testnet" sub="Chain 10143" />
-            <Stat label="Asset" value="xStocks" sub="TSLAx, NVDAx, SPYx, AAPLx" />
+            <Stat label="Asset" value="xStocks" sub="TSLAx, NVDAx, SPYx, AAPLx and five more" />
             <Stat
               label="USDC"
               value={!address || usdc === undefined ? '-' : usd(usdc).replace('$', '')}
@@ -117,8 +117,8 @@ export default function MonadFaucetPage() {
                 <TokenIcon symbol="NVDAx" size={40} />
               </div>
             }
-            title="USDC and the four stocks"
-            blurb="10,000 USDC, and 10 each of TSLAx, NVDAx, SPYx and AAPLx. One transaction, one signature."
+            title="USDC and the nine stocks"
+            blurb="10,000 USDC, and 10 each of TSLAx, NVDAx, SPYx, AAPLx, QQQx, GOOGLx, MSFTx, AMZNx and METAx. One transaction, one signature."
           >
             <MintButton
               onClick={address ? mintEverything : () => connect()}
