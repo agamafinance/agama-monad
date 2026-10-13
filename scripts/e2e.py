@@ -243,6 +243,13 @@ def fund():
 def keeper(jobs):
     env = dict(os.environ, RPC_URL=RPC, DEPLOYMENT=os.path.join(ROOT, "deployments", str(DEP["chainId"]) + ".json"),
                KEEPER_KEY=K["admin"], ONCE="1", JOBS=jobs)
+    if MODE == "fork":
+        # anvil's clock only moves when a block is mined: bring it to now, or
+        # the keeper's estimate would see a fresh report as from the future.
+        now = int(time.time())
+        if num(cast("block", "latest", "-f", "timestamp")) < now:
+            cast("rpc", "evm_setNextBlockTimestamp", str(now))
+            cast("rpc", "evm_mine")
     out = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "keeper.py")], env=env,
                          capture_output=True, text=True)
     for line in out.stdout.strip().splitlines():
