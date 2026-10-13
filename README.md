@@ -108,7 +108,10 @@ Everything Agama does on its own runs through `cre/agama-monad`, every minute:
 
 The keeper on GitHub Actions runs it with `cre workflow simulate --broadcast`,
 so every price and every agent action on the live deployment arrives through
-the forwarder and the receiver. CRE_PROOF
+the forwarder and the receiver. First live run:
+[`0x3be72eb3…e4d9`](https://testnet.monadvision.com/tx/0x3be72eb3775243cee41f2d662eae5c07adc0b1ce5fde007e45d60c220e85e4d9)
+brought AMZN (extended session) and gold (XAU/USD) in one report, each verified
+by Chainlink's VerifierProxy into its own oracle.
 Details in [`cre/README.md`](cre/README.md).
 
 ## Architecture

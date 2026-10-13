@@ -55,6 +55,14 @@ is open to anyone. Nothing to do, nothing written.
 The first receiver (prices and rebalances only, four stocks) was
 `0xec27460813bEB044DB01A1C1F28b91E69d8c95b8`.
 
+## Proof
+
+First live run on Monad testnet, Oct 13 2026:
+[`0x3be72eb3775243cee41f2d662eae5c07adc0b1ce5fde007e45d60c220e85e4d9`](https://testnet.monadvision.com/tx/0x3be72eb3775243cee41f2d662eae5c07adc0b1ce5fde007e45d60c220e85e4d9).
+The forwarder delivered one report with two prices, AMZN (extended session)
+and gold (XAU/USD, v3), each verified by Chainlink's VerifierProxy and stored
+in its own oracle (`PriceStored` twice, `ReportHandled`).
+
 ## How it runs
 
 The keeper (`.github/workflows/keeper.yml`, `scripts/keeper.py`) runs
