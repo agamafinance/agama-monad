@@ -13,7 +13,7 @@
   "markets": [
     {
       "ticker": "TSLA",
-      "adapter": "0x73bB2a8AE77eCfE9f17Bec028f1FC469aC3010DF",
+      "adapter": "0xf67a82caA41FB8A78dAa05e2C8F0FD89121D46e0",
       "streams": {
         "regular": "0x000b08f5e1a8c355e9982cea5707cf7b60be8ef91c42bb8022fd63f1bd71f6ab",
         "extended": "0x000b4642144cb2e2f0e38ba57cc15a6549fd1522da1e7560f3d9e198b23fbe50",
@@ -22,7 +22,7 @@
     },
     {
       "ticker": "NVDA",
-      "adapter": "0x15eD53A7c31782eb2A2505A5beb71596362e49Ea",
+      "adapter": "0xE2ec9F1462D99e9D8c159182f839490E7c7815C3",
       "streams": {
         "regular": "0x000b1d444945231e44dd47736c6abe288b10cb1b53941c7c68012fbdd2b1755c",
         "extended": "0x000bf689e4aa5c006c89c207eb155ae99184e433a518753eb745cc552391a743",
@@ -31,7 +31,7 @@
     },
     {
       "ticker": "SPY",
-      "adapter": "0x7a1a1a9D936456bF8c8dcF959EBAC5690CE7B310",
+      "adapter": "0xf18E83C5DC3FA99067796e4944c54E0B7a2d567B",
       "streams": {
         "regular": "0x000b220be6fe94b85d6d8e8d5d4d212f5b86a644cbcc1dbf28b9e77b6810a5ec",
         "extended": "0x000b5197360a398d3fa52c25c43f2be1f782bba7f576373548b8414117e3a039",
@@ -40,7 +40,7 @@
     },
     {
       "ticker": "AAPL",
-      "adapter": "0x79F332F9afE1C7370a82640174c730472bC44529",
+      "adapter": "0x061488361331d00926Df3d41ed2DC8523fb60802",
       "streams": {
         "regular": "0x000b61d6dec069be40efc5f21f0345142a827f42966a07fa4743773383a8dd7b",
         "extended": "0x000bbff670f86a195158a347cb04693bdc7d475ab43c645448c8835268b1d099",
@@ -49,7 +49,7 @@
     },
     {
       "ticker": "QQQ",
-      "adapter": "0xE497aC95AE3C84A1BC57e71515702F3494129Be1",
+      "adapter": "0x96c6D89B5c653654d1f257f88948B6463E20e703",
       "streams": {
         "regular": "0x000bebb97e1da3eb1a71ac362a99255f944224355ef09067cd54f2fe2d0075f6",
         "extended": "0x000b084fdb7383d198d9a793f5bda0d526a479722c3dd60166e0ebde078962d8",
@@ -58,7 +58,7 @@
     },
     {
       "ticker": "GOOGL",
-      "adapter": "0xf8BC1E89fDef0021c0C8403C5C9CB01DF58bbEFa",
+      "adapter": "0x9ead365290f957c3e9F064F886DDda7d14c841B2",
       "streams": {
         "regular": "0x000b62925feea3a68e02358e2cdd0edade49ba782cd7ba605bd834cdfd5e04af",
         "extended": "0x000b38cecfeca43e3b5cce05b2e25abebad62de192727e5d6fae47846ff90e0a",
@@ -67,7 +67,7 @@
     },
     {
       "ticker": "MSFT",
-      "adapter": "0x5379E7014bb9E4785B2598330Cd82379437e67C0",
+      "adapter": "0x3FcC4871Eb1C125641E675832b568B9CFb9A6aDe",
       "streams": {
         "regular": "0x000b032fac53b731d7e9e8b0767151984f97ef151900a78be2fcc9713455ffc5",
         "extended": "0x000b48add0681d9ca52424c1eccda5bcbf038eb85db3e67fe9b2931f1c2fd97a",
@@ -76,7 +76,7 @@
     },
     {
       "ticker": "AMZN",
-      "adapter": "0x3f348157C34CA61E033B0b546a709582aF83a722",
+      "adapter": "0xB044B5f8497DFb5933a938107Febb41Bde3e1cD3",
       "streams": {
         "regular": "0x000babb1ff3f6920ebb15da8439f03f3b8669cc3f4c6b69594289e2e6af485ef",
         "extended": "0x000b3a32200a6ca3e3c55a7de7ba690c86a071c58167f34778ab0cbf1d37fdc6",
@@ -85,7 +85,7 @@
     },
     {
       "ticker": "META",
-      "adapter": "0xA821aE95A44cb9d517b398968751d459fDA37c6D",
+      "adapter": "0x9771d89d6096529867832EBd1dBB127b6ff5efA9",
       "streams": {
         "regular": "0x000b7a8a64a03bee8c58f32e24bef3cad363bd33cf5384f485d301f0c8cf2fc0",
         "extended": "0x000bb3991a740a35cafa5cdb2f9bd9372d575ec137a99543e943caa4a6b9c4bc",
