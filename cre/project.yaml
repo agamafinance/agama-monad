@@ -11,3 +11,9 @@ production-settings:
   rpcs:
     - chain-name: monad-testnet
       url: https://testnet-rpc.monad.xyz
+
+# `fork-settings`: the same workflow against `anvil --fork-url https://testnet-rpc.monad.xyz`.
+fork-settings:
+  rpcs:
+    - chain-name: monad-testnet
+      url: http://127.0.0.1:8545
