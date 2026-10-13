@@ -166,7 +166,7 @@ export default function MonadLendPage() {
           <div className="rounded-2xl bg-[#fdfaf1] p-6 shadow-[0_1px_3px_rgba(20,50,35,0.06),0_10px_30px_rgba(20,50,35,0.09)]">
             <h2 className="text-[17px] font-semibold text-fg">What backs your USDC</h2>
             <dl className="mt-4 space-y-2 text-[13px]">
-              <Row label="Collateral" value="Nine xStocks, vault shares" />
+              <Row label="Collateral" value="Nine xStocks, XAUt0, vault shares" />
               <Row label="Price" value="Chainlink Data Streams, verified on chain by Chainlink's Verifier" />
               <Row label="Liquidation" value="Partial, absorbed by the stability pool" />
               <Row label="Always open" value="Priced in every session Chainlink streams: regular, extended and overnight" />

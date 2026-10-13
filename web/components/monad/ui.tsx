@@ -270,7 +270,7 @@ export function TestnetNote() {
     <p className="text-[12px] text-fg-muted">
       Testnet: the stocks and USDC are stand-ins from the Faucet tab, under the real xStocks&apos; names and
       tickers, as on Monad mainnet; no xStock faucet exists on testnet. Prices are real: Chainlink
-      Data Streams reports, verified on chain by Chainlink&apos;s Verifier. Trades fill on Kuru&apos;s order book.
+      Data Streams reports, verified on chain by Chainlink&apos;s Verifier, for the shares and for gold. Trades fill on Kuru&apos;s order book.
     </p>
   );
 }

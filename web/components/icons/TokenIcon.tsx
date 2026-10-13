@@ -34,6 +34,8 @@ const TOKENS: Record<string, TokenInfo> = {
   wMSFTx: { bg: '#737373', fg: '#fff', symbol: 'M', logo: '/stocks/msftx.png' },
   wAMZNx: { bg: '#FF9900', fg: '#000', symbol: 'A', logo: '/stocks/amznx.png' },
   wMETAx: { bg: '#0866FF', fg: '#fff', symbol: 'M', logo: '/stocks/metax.png' },
+  XAUt0: { bg: '#C9A23A', fg: '#fff', symbol: 'G', logo: '/stocks/xaut0.png' },
+  wXAUt0: { bg: '#C9A23A', fg: '#fff', symbol: 'G', logo: '/stocks/xaut0.png' },
 };
 
 const FALLBACK = { bg: '#3B4256', fg: '#FFFFFF', symbol: '?' };

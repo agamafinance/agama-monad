@@ -1,6 +1,6 @@
 import type {Address} from "viem";
 
-export type StockKey = "TSLA" | "NVDA" | "SPY" | "AAPL" | "QQQ" | "GOOGL" | "MSFT" | "AMZN" | "META";
+export type StockKey = "TSLA" | "NVDA" | "SPY" | "AAPL" | "QQQ" | "GOOGL" | "MSFT" | "AMZN" | "META" | "XAUT";
 
 export type Deployment = {
   chainId: number;
@@ -21,6 +21,8 @@ export type Deployment = {
     /// Chainlink Data Streams VerifierProxy the oracle verifies reports against.
     verifierProxy?: Address;
     creReceiver?: Address;
+    /// Gold's own oracle: Chainlink's XAU/USD stream, schema v3.
+    goldOracle?: Address;
   };
   adapters: Record<StockKey | "VAULT", Address>;
   tokens: {
@@ -34,6 +36,7 @@ export type Deployment = {
     wMSFTx: Address;
     wAMZNx: Address;
     wMETAx: Address;
+    wXAUt0: Address;
   };
   /// Kuru: the venue every swap goes through, and the order book per stock
   /// (base xStock / USDC), when deployed.

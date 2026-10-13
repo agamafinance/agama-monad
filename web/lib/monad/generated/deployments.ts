@@ -13,7 +13,8 @@ export const deployments: Partial<Record<number, Deployment>> = {
       "GOOGL": "0xf8BC1E89fDef0021c0C8403C5C9CB01DF58bbEFa",
       "MSFT": "0x5379E7014bb9E4785B2598330Cd82379437e67C0",
       "AMZN": "0x3f348157C34CA61E033B0b546a709582aF83a722",
-      "META": "0xA821aE95A44cb9d517b398968751d459fDA37c6D"
+      "META": "0xA821aE95A44cb9d517b398968751d459fDA37c6D",
+      "XAUT": "0x004B79F41cEAC1C6A66917e67976B483FbF40910"
     },
     "admin": "0x65688E3942295D9975953E4842Ffa6dc822A9F9B",
     "chainId": 10143,
@@ -30,7 +31,8 @@ export const deployments: Partial<Record<number, Deployment>> = {
       "testDexRouter": "0x2206d75015C7fD9c67E7848b0a7Fc985AdbF0d24",
       "verifierProxy": "0x72790f9eB82db492a7DDb6d2af22A270Dcc3Db64",
       "zapRouter": "0xE362eC8747F39362464c485768EbFf0A235F6748",
-      "creReceiver": "0xec27460813bEB044DB01A1C1F28b91E69d8c95b8"
+      "creReceiver": "0xec27460813bEB044DB01A1C1F28b91E69d8c95b8",
+      "goldOracle": "0x5C2C5F19A17B62055221bD8b80783E86b802e9Eb"
     },
     "deployedAtBlock": 70438570,
     "keeper": "0x65688E3942295D9975953E4842Ffa6dc822A9F9B",
@@ -44,7 +46,8 @@ export const deployments: Partial<Record<number, Deployment>> = {
       "wGOOGLx": "0x40F1197bff8a52355711ABC9526442E9D1C9E3ba",
       "wMSFTx": "0xd3929638975e4B369e7fd1C3214c36363477667e",
       "wAMZNx": "0xC035F5E538a2C8c6e09D3e683dB1a5183eCC93A2",
-      "wMETAx": "0xA294293aAE7C8CcDE2dCee1525215577abD8f4a6"
+      "wMETAx": "0xA294293aAE7C8CcDE2dCee1525215577abD8f4a6",
+      "wXAUt0": "0x6474aD910990333988B37bf723190ea3dF101a40"
     },
     "kuru": {
       "AAPL": "0x3d06BD639f8b283B1635Eb543B86701cB93F2B91",
@@ -58,7 +61,8 @@ export const deployments: Partial<Record<number, Deployment>> = {
       "GOOGL": "0x2C6e24245D79bE1ef124a665Ce714cE035Eea5cA",
       "MSFT": "0x0f3B0b1011d102B3a7eD6768fBcCebDa03825C03",
       "AMZN": "0x1C439824BDf900bf900E3698a059fEF9B6e5F9dD",
-      "META": "0x66ff897EbA98e104C18677DF6802806e36EF9cfA"
+      "META": "0x66ff897EbA98e104C18677DF6802806e36EF9cfA",
+      "XAUT": "0x6BFa7BcD643C60530F22c7B976485e28B77CB7aE"
     }
   }
 };

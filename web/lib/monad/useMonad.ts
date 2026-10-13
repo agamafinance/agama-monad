@@ -162,7 +162,7 @@ export function useMonadMarkets(address?: Address) {
             const [
               feed, maxLtv, lt, baseLt, borrowAllowed, wrapperPrice, perShare, balance, baseBalance,
             ] = await Promise.all([
-              pub.readContract({ address: ADDR.oracle, abi: stockOracleAbi, functionName: 'feed', args: [stock.ticker] }),
+              pub.readContract({ address: stock.key === 'XAUT' && ADDR.goldOracle ? ADDR.goldOracle : ADDR.oracle, abi: stockOracleAbi, functionName: 'feed', args: [stock.ticker] }),
               pub.readContract({ address: adapter, abi: xStockAdapterAbi, functionName: 'MAX_LTV' }),
               pub.readContract({ address: adapter, abi: xStockAdapterAbi, functionName: 'LIQUIDATION_THRESHOLD' }),
               pub.readContract({ address: adapter, abi: xStockAdapterAbi, functionName: 'BASE_LIQUIDATION_THRESHOLD' }),
