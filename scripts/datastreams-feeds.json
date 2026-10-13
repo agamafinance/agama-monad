@@ -43,5 +43,8 @@
     "regular": "0x000b7a8a64a03bee8c58f32e24bef3cad363bd33cf5384f485d301f0c8cf2fc0",
     "extended": "0x000bb3991a740a35cafa5cdb2f9bd9372d575ec137a99543e943caa4a6b9c4bc",
     "overnight": "0x000b2ef7c9d5369d8494a1000933a6815fd79dead95acb8ae07ce4f10127f926"
+  },
+  "XAUT": {
+    "xau": "0x0003036191b204b5ba40ae93b6004917000f66d8527b64bad7f6b1d346ccdce9"
   }
 }
