@@ -106,7 +106,7 @@ Everything Agama does on its own runs through `cre/agama-monad`, every minute:
    each on chain) and runs the jobs. DON consensus on top of DON signatures;
    the receiver holds no role and no funds.
 
-The keeper on GitHub Actions runs it with `cre workflow simulate --broadcast`,
+The keeper runs it every minute with `cre workflow simulate --broadcast`,
 so every price and every agent action on the live deployment arrives through
 the forwarder and the receiver. First live run:
 [`0x3be72eb3…e4d9`](https://testnet.monadvision.com/tx/0x3be72eb3775243cee41f2d662eae5c07adc0b1ce5fde007e45d60c220e85e4d9)
@@ -209,9 +209,9 @@ python3 scripts/keeper.py           # the CRE workflow every minute, then the Ku
 cd web && pnpm dev                  # http://localhost:3004/monad
 ```
 
-The keeper runs on GitHub Actions (`.github/workflows/keeper.yml`), with a key
-that holds no role in the protocol: the CRE workflow (verified prices when they
-move, the agents), then the Kuru quotes. A tick where the CRE run fails does the
+The keeper (`scripts/keeper.py`) runs with a key that holds no role in the
+protocol: the CRE workflow (verified prices when they move, the agents), then
+the Kuru quotes. A tick where the CRE run fails does the
 same jobs from Python.
 
 ## Built during Metropolis, and before it

@@ -65,7 +65,7 @@ in its own oracle (`PriceStored` twice, `ReportHandled`).
 
 ## How it runs
 
-The keeper (`.github/workflows/keeper.yml`, `scripts/keeper.py`) runs
+The keeper (`scripts/keeper.py`) runs
 `cre workflow simulate --broadcast` every minute, compiled once per job
 (`--wasm`). That is the same workflow code, and every write goes through
 Chainlink's MockKeystoneForwarder to the receiver. When a CRE run fails, that
