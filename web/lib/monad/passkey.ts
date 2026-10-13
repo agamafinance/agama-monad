@@ -2,7 +2,7 @@
 
 import {
   createPasskeyWithPrfOutput, createSecp256k1SigningSession, getPasskeyPrfOutput, isMeraError,
-  type Secp256k1SigningSession,
+  MeraError, type Secp256k1SigningSession, type WebAuthnClient,
 } from '@category-labs/mera';
 import { toViemAccount } from '@category-labs/mera/viem';
 import { HDKey } from '@scure/bip32';
@@ -43,38 +43,82 @@ function open(prfOutput: Uint8Array): LocalAccount {
   return toViemAccount(session);
 }
 
-/// One button for both cases: the passkey this browser already used, else any
-/// saved passkey of this site (another device's, synced), else a new one. A
-/// browser never tells a site whether a passkey exists, so "none" is the
-/// prompt coming back empty or closed, and a new passkey is made right after.
-export async function signInWithPasskey(): Promise<LocalAccount> {
-  const known = stored();
+/// Asks the platform for a passkey of this site already on this device, with
+/// Chrome's immediate UI mode (`uiMode: 'immediate'`, Chrome 149): when there
+/// is none, it rejects at once and shows nothing, so a first visit goes
+/// straight to creating one. Only the assertion goes through here; creation
+/// keeps Mera's own client.
+const immediateClient: WebAuthnClient = {
+  createCredential: () => Promise.reject(new MeraError('PASSKEY_OPERATION_FAILED', 'not used')),
+  async getCredential(request) {
+    const credential = (await navigator.credentials.get({
+      publicKey: {
+        rpId: request.rpId,
+        challenge: request.challenge,
+        userVerification: request.userVerification,
+        extensions: { prf: { eval: { first: request.prfSalt } } },
+      },
+      uiMode: 'immediate',
+    } as CredentialRequestOptions)) as PublicKeyCredential | null;
+    if (!credential) throw new MeraError('PASSKEY_OPERATION_FAILED', 'No passkey on this device');
+    const first = credential.getClientExtensionResults().prf?.results?.first;
+    return {
+      credentialId: new Uint8Array(credential.rawId),
+      ...(first ? { prfOutput: new Uint8Array(first as ArrayBuffer) } : {}),
+    };
+  },
+};
+
+async function immediateSupported(): Promise<boolean> {
   try {
-    const { prfOutput, credentialId } = await getPasskeyPrfOutput({
-      rpId: window.location.hostname,
-      credential: known as never,
-    });
-    if (known?.credentialId !== credentialId) {
-      window.localStorage.setItem(STORED, JSON.stringify({ credentialId }));
-    }
-    return open(prfOutput);
-  } catch (e) {
-    // A passkey that exists but cannot derive an account is an answer, not an
-    // absence: making another one would hit the same wall.
-    if (known || (isMeraError(e) && e.code !== 'PASSKEY_OPERATION_FAILED')) {
-      throw new Error(passkeyErrorText(e));
-    }
+    const caps = await (PublicKeyCredential as unknown as {
+      getClientCapabilities?: () => Promise<Record<string, boolean>>;
+    }).getClientCapabilities?.();
+    return !!caps?.immediateGet;
+  } catch {
+    return false;
   }
+}
+
+function remember(credentialId: string, transports?: readonly string[]) {
+  window.localStorage.setItem(STORED, JSON.stringify({ credentialId, transports }));
+}
+
+async function create(): Promise<LocalAccount> {
+  const created = await createPasskeyWithPrfOutput({
+    rp: { id: window.location.hostname, name: 'Agama' },
+    user: { name: 'Agama on Monad', displayName: 'Agama on Monad' },
+  });
+  remember(created.credentialId, created.transports);
+  return open(created.prfOutput);
+}
+
+/// One button, three cases, one prompt each:
+/// - this browser signed in before: that exact passkey, nothing to choose;
+/// - the browser can tell whether a passkey exists here (immediate UI mode):
+///   yours if there is one, else a new one, with no empty picker in between;
+/// - it cannot (Safari, Firefox today): a new passkey.
+export async function signInWithPasskey(): Promise<LocalAccount> {
+  const rpId = window.location.hostname;
   try {
-    const created = await createPasskeyWithPrfOutput({
-      rp: { id: window.location.hostname, name: 'Agama' },
-      user: { name: 'Agama on Monad', displayName: 'Agama on Monad' },
-    });
-    window.localStorage.setItem(
-      STORED,
-      JSON.stringify({ credentialId: created.credentialId, transports: created.transports }),
-    );
-    return open(created.prfOutput);
+    const known = stored();
+    if (known) {
+      const { prfOutput, credentialId } = await getPasskeyPrfOutput({ rpId, credential: known as never });
+      if (known.credentialId !== credentialId) remember(credentialId);
+      return open(prfOutput);
+    }
+    if (await immediateSupported()) {
+      try {
+        const { prfOutput, credentialId } = await getPasskeyPrfOutput({ rpId, webAuthnClient: immediateClient });
+        remember(credentialId);
+        return open(prfOutput);
+      } catch (e) {
+        // No passkey here (or the user waved the sheet away): make one. A
+        // passkey that answered without PRF is a real answer, not an absence.
+        if (isMeraError(e) && e.code === 'PRF_UNAVAILABLE') throw e;
+      }
+    }
+    return await create();
   } catch (e) {
     throw new Error(passkeyErrorText(e));
   }
