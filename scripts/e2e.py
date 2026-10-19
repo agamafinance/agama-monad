@@ -7,8 +7,8 @@
 
 Scenario (every step asserted on-chain state):
   1. keeper pushes signed Chainlink Data Streams reports, verified on chain
-  2. Alice: Earn on 10 wTSLAx at 25% LTV (keeps her vault shares as buffer)
-  3. Carol: Earn on 10 wTSLAx at 30% LTV, then pulls her vault shares out (no buffer)
+  2. Alice: Earn on 10 wTSLAx, HF 1.6 (keeps her vault shares as buffer)
+  3. Carol: Earn on 10 wTSLAx at HF 1.33, then pulls her vault shares out (no buffer)
   4. Bob: Amplify 1,000 USDC at 3x
   5. vault yield settled by the operator -> Bob's equity grows
   6. TSLA crash to ~71% in steps inside the oracle deviation cap
@@ -259,6 +259,21 @@ def keeper(jobs):
     LAST_BLOCK[0] = max(LAST_BLOCK[0], num(cast("block-number")))
 
 
+def terms():
+    """TSLA's weekday max LTV, liquidation threshold and closed-session buffer,
+    read from the adapter so the scenario follows whatever it was listed with."""
+    ml = num(call(A["TSLA"], "BASE_MAX_LTV()(uint256)"))
+    lt = num(call(A["TSLA"], "BASE_LIQUIDATION_THRESHOLD()(uint256)"))
+    return ml, lt, num(call(A["TSLA"], "WEEKEND_BUFFER_BPS()(uint256)"))
+
+
+def lv(bps):
+    """An LTV written for a 40% liquidation threshold, scaled to TSLA's own, so
+    every health factor in the scenario (1.6 at open, 1.14 after the crash)
+    reads the same whatever the listing."""
+    return bps * terms()[1] // 4_000
+
+
 def feed(ticker):
     out = call(C["oracle"], "feed(bytes32)((uint128,uint64,bool,bool))", b32(ticker))
     parts = out.strip("()").split(", ")
@@ -350,14 +365,14 @@ def part_a():
     p0, _, is_open = feed("TSLA")
     ok(p0 > 0 and is_open, f"TSLA {p0 / E18:.2f} USD, market open")
 
-    step("2. Alice: Earn on 10 wTSLAx at 25% LTV")
+    step(f"2. Alice: Earn on 10 wTSLAx at {lv(2500) / 100:.2f}% LTV")
     send("alice", T["wTSLAx"], "approve(address,uint256)", C["earnRouter"], str(10 * E18))
-    send("alice", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), "2500")
+    send("alice", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), str(lv(2500)))
     a = earn_pos("alice")
     # Relative: on a shared testnet the actor may carry a position (and its
     # accrued interest) from an earlier run.
-    ok(abs(a["debt"] - a["value"] // 4) <= max(2, a["value"] // 4000),
-       f"borrowed {a['debt'] / E6:.2f} USDC = 25% of {a['value'] / E6:.2f}")
+    ok(abs(a["debt"] - a["value"] * lv(2500) // 10_000) <= max(2, a["value"] // 4000),
+       f"borrowed {a['debt'] / E6:.2f} USDC = {lv(2500) / 100:.2f}% of {a['value'] / E6:.2f}")
     ok(abs(a["hf"] - 16 * RAY // 10) < RAY // 1000, f"HF {a['hf'] / RAY:.3f}")
     # "The borrowed USDC went into the vault" is a question about the shares the
     # account holds, so ask the vault: `redeemableUsdc` converts them at the
@@ -372,9 +387,9 @@ def part_a():
        f"counted as collateral at the capped rate: {a['freeValue'] / E6:.2f} USDC, "
        f"{(redeemable - a['freeValue']) / E6:.2f} still held back by the CAPO ceiling")
 
-    step("3. Carol: Earn at 30% LTV, then withdraws her vault shares (no buffer)")
+    step("3. Carol: Earn at HF 1.33, then withdraws her vault shares (no buffer)")
     send("carol", T["wTSLAx"], "approve(address,uint256)", C["earnRouter"], str(10 * E18))
-    send("carol", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), "3000")
+    send("carol", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), str(lv(3000)))
     c = earn_pos("carol")
     send("carol", c["account"], "sweep(address)", C["sagUSD"])
     ok(earn_pos("carol")["free"] == 0, f"Carol debt {c['debt'] / E6:.2f} USDC, buffer removed")
@@ -487,16 +502,17 @@ def part_b():
        "borrowAllowed stays true: a shut session is not a shut market")
     lt = num(call(A["TSLA"], "LIQUIDATION_THRESHOLD()(uint256)"))
     ml = num(call(A["TSLA"], "MAX_LTV()(uint256)"))
-    ok(lt == 3_200 and ml == 2_200,
+    base_ml, base_lt, buf = terms()
+    ok(lt == base_lt - buf and ml == base_ml - buf,
        f"terms tightened on both sides: max LTV {ml / 100:.0f}%, liquidation at {lt / 100:.0f}% "
-       f"(each 8% under the weekday figure)")
+       f"(each {buf / 100:.0f}% under the weekday figure)")
     send("frank", T["wTSLAx"], "approve(address,uint256)", C["earnRouter"], str(10 * E18))
-    ok(reverts("frank", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), "2500"),
-       "the weekday 25% is refused out of session")
-    send("frank", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), "2200")
+    ok(reverts("frank", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), str(ml + 100)),
+       f"{(ml + 100) / 100:.0f}% is refused out of session")
+    send("frank", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), str(ml))
     f12 = earn_pos("frank")
-    ok(f12["debt"] > 0 and f12["hf"] > 14 * RAY // 10,
-       f"but 22% goes through, at HF {f12['hf'] / RAY:.3f}: the same cushion as a weekday open")
+    ok(f12["debt"] > 0 and f12["hf"] > RAY,
+       f"but {ml / 100:.0f}% goes through, at HF {f12['hf'] / RAY:.3f}")
     # Put Frank back to flat for step 13. A close on the buffer alone lands a
     # rounding short once interest has accrued, which is what `closeWithTopUp`
     # is for; step 13 exercises that path on purpose, this is only cleanup.
@@ -511,14 +527,14 @@ def part_b():
     # report, in session, lifts the freeze.
     time.sleep(3)  # a report observed after the close
     keeper("prices")
-    ok(num(call(A["TSLA"], "MAX_LTV()(uint256)")) == 3_000,
+    ok(num(call(A["TSLA"], "MAX_LTV()(uint256)")) == base_ml,
        "the keeper relay reopened the session on its own, weekday terms are back")
     push("TSLA", p0, is_open=True)  # back to the scenario's baseline price
 
     step("13. Frank: Earn, soft deleverage, recovery, close with a wallet top-up")
     # Its own approval rather than whatever step 12 happened to leave behind.
     send("frank", T["wTSLAx"], "approve(address,uint256)", C["earnRouter"], str(10 * E18))
-    send("frank", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), "2500")
+    send("frank", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), str(lv(2500)))
     f = earn_pos("frank")
     ok(f["debt"] > 0, f"Frank borrowed {f['debt'] / E6:.2f} USDC")
     walk("TSLA", p0 * 715 // 1000)
@@ -537,7 +553,7 @@ def part_b():
 
     step("14. Grace: Earn, Amplify stacked on it, unstack, close")
     send("grace", T["wTSLAx"], "approve(address,uint256)", C["earnRouter"], str(10 * E18))
-    send("grace", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), "2500")
+    send("grace", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), str(lv(2500)))
     g = earn_pos("grace")
     send("grace", C["amplifyRouter"], "openFromEarn(uint256)", "20000")
     amp = amp_pos("grace")
@@ -580,10 +596,10 @@ def part_b():
             text=True).strip()
         min_out = (spend * 10**18 // price) * 99 // 100
         send("erin", C["zapRouter"], "buyAndEarn(uint256,address,address,bytes,address,uint256,uint256)",
-             str(spend), dex, dex, data, A["TSLA"], str(min_out), "2500")
+             str(spend), dex, dex, data, A["TSLA"], str(min_out), str(lv(2500)))
         p = earn_pos("erin")
         ok(p["collateral"] >= min_out and p["debt"] > 0 and wtsla("erin") == wtsla_before,
-           f"bought {p['collateral'] / E18:.6f} wTSLAx with {spend / E6:.0f} USDC and opened at 25% LTV "
+           f"bought {p['collateral'] / E18:.6f} wTSLAx with {spend / E6:.0f} USDC and opened at {lv(2500) / 100:.2f}% LTV "
            f"(debt {p['debt'] / E6:.2f}, HF {p['hf'] / RAY:.3f}), nothing left in the wallet")
 
     step("16. Agents: the stock goes up, the position follows, the yield becomes stock")
@@ -591,19 +607,19 @@ def part_b():
     # Frank closed his position in step 13, so use a fresh one for the agents.
     send("frank", T["wTSLAx"], "faucet(address,uint256)", ADDR["frank"], str(10 * E18)) if MODE == "testnet" else None
     send("frank", T["wTSLAx"], "approve(address,uint256)", C["earnRouter"], str(10 * E18))
-    send("frank", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), "2500")
+    send("frank", C["earnRouter"], "open(address,uint256,uint256)", A["TSLA"], str(10 * E18), str(lv(2500)))
     f = earn_pos("frank")
     acct = f["account"]
     target = num(call(acct, "targetLtvBps(address)(uint256)", A["TSLA"]))
-    ok(2_450 <= target <= 2_550, f"the account remembers the level the user picked ({target / 100:.0f}% LTV)")
+    ok(abs(target - lv(2500)) <= 50, f"the account remembers the level the user picked ({target / 100:.0f}% LTV)")
 
     p0_now, _, _ = feed("TSLA")
     walk("TSLA", p0_now * 12 // 10)  # the stock gains 20%
     debt_before = f["debt"]
     send("buyer", acct, "rebalance(address)", A["TSLA"])  # anyone can run the agent
     f = earn_pos("frank")
-    ok(f["debt"] > debt_before and abs(f["debt"] - f["value"] // 4) < f["value"] // 200,
-       f"agent borrowed the difference: debt {debt_before / E6:.2f} -> {f['debt'] / E6:.2f} USDC, back at 25%")
+    ok(f["debt"] > debt_before and abs(f["debt"] - f["value"] * lv(2500) // 10_000) < f["value"] // 200,
+       f"agent borrowed the difference: debt {debt_before / E6:.2f} -> {f['debt'] / E6:.2f} USDC, back at {lv(2500) / 100:.2f}%")
 
     dex = C.get("testDexRouter")
     if dex:
@@ -632,7 +648,7 @@ def part_b():
     send("buyer", base, "faucet(address,uint256)", ADDR["buyer"], str(5 * E18))
     base_before = num(call(base, "balanceOf(address)(uint256)", ADDR["buyer"]))
     send("buyer", base, "approve(address,uint256)", C["earnRouter"], str(5 * E18))
-    send("buyer", C["earnRouter"], "openWithBase(address,uint256,uint256)", A["TSLA"], str(5 * E18), "2500")
+    send("buyer", C["earnRouter"], "openWithBase(address,uint256,uint256)", A["TSLA"], str(5 * E18), str(lv(2500)))
     p = earn_pos("buyer")
     ok(p["collateral"] > 0 and p["debt"] > 0,
        f"deposited 5 base xStock straight from the wallet: {p['collateral'] / E18:.6f} wrapped, "
